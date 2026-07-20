@@ -4,6 +4,11 @@
       "source": "/",
       "destination": "/backoffice/admin.html",
       "permanent": false
+    },
+    {
+      "source": "/index.html",
+      "destination": "/backoffice/admin.html",
+      "permanent": false
     }
   ]
 }

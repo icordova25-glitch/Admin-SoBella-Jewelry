@@ -45,7 +45,19 @@ async function backofficeRequest(path, options = {}) {
   }
   const response = await backofficeAuth.fetch(apiUrl(path), options);
   if (!response.ok) {
-    const message = await response.text();
+    const contentType = response.headers.get('content-type') || '';
+    let message = '';
+    if (contentType.includes('application/json')) {
+      try {
+        const payload = await response.json();
+        message = payload.error || payload.message || '';
+      } catch (error) {
+        message = '';
+      }
+    } else {
+      const raw = await response.text();
+      message = raw.includes('<') ? '' : raw;
+    }
     throw new Error(message || `Request failed with status ${response.status}`);
   }
   return response;

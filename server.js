@@ -4,12 +4,14 @@ const fs = require('fs');
 
 const app = express();
 const port = process.env.PORT || 3000;
-const dataDir = path.join(__dirname, 'data');
+const isVercel = Boolean(process.env.VERCEL);
+const sourceDataDir = path.join(__dirname, 'data');
+const dataDir = isVercel ? path.join('/tmp', 'sobella-data') : sourceDataDir;
 const productsPath = path.join(dataDir, 'products.json');
 const ordersPath = path.join(dataDir, 'orders.json');
 const bioPath = path.join(dataDir, 'business-bio.json');
 const bankInfoPath = path.join(dataDir, 'bank-info.json');
-const uploadsDir = path.join(__dirname, 'uploads');
+const uploadsDir = isVercel ? path.join('/tmp', 'sobella-uploads') : path.join(__dirname, 'uploads');
 const backofficeUser = process.env.BACKOFFICE_USERNAME || 'admin';
 const backofficePass = process.env.BACKOFFICE_PASSWORD || 'sobella-admin';
 
@@ -50,32 +52,36 @@ const defaultProducts = [
 
 app.use(express.json());
 
+function seedRuntimeFile(fileName, fallback) {
+  const runtimePath = path.join(dataDir, fileName);
+  if (fs.existsSync(runtimePath)) {
+    return;
+  }
+
+  const sourcePath = path.join(sourceDataDir, fileName);
+  if (fs.existsSync(sourcePath)) {
+    fs.copyFileSync(sourcePath, runtimePath);
+    return;
+  }
+
+  writeJson(runtimePath, fallback);
+}
+
 function ensureDataFiles() {
   fs.mkdirSync(dataDir, { recursive: true });
   fs.mkdirSync(uploadsDir, { recursive: true });
 
-  if (!fs.existsSync(productsPath)) {
-    writeJson(productsPath, defaultProducts);
-  }
-
-  if (!fs.existsSync(ordersPath)) {
-    writeJson(ordersPath, []);
-  }
-
-  if (!fs.existsSync(bioPath)) {
-    writeJson(bioPath, {
-      bio: 'SoBella Jewelry creates timeless, elegant pieces that celebrate modern love, personal style, and everyday luxury.',
-    });
-  }
-
-  if (!fs.existsSync(bankInfoPath)) {
-    writeJson(bankInfoPath, {
-      accountHolder: '',
-      bankName: '',
-      accountNumber: '',
-      routingNumber: '',
-    });
-  }
+  seedRuntimeFile('products.json', defaultProducts);
+  seedRuntimeFile('orders.json', []);
+  seedRuntimeFile('business-bio.json', {
+    bio: 'SoBella Jewelry creates timeless, elegant pieces that celebrate modern love, personal style, and everyday luxury.',
+  });
+  seedRuntimeFile('bank-info.json', {
+    accountHolder: '',
+    bankName: '',
+    accountNumber: '',
+    routingNumber: '',
+  });
 }
 
 function readJson(filePath, fallback) {
@@ -91,6 +97,7 @@ function readJson(filePath, fallback) {
 }
 
 function writeJson(filePath, data) {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
 }
 
