@@ -50,26 +50,79 @@ const defaultProducts = [
   },
 ];
 
+const memoryStore = {
+  products: JSON.parse(JSON.stringify(defaultProducts)),
+  orders: [],
+  bio: {
+    bio: 'SoBella Jewelry creates timeless, elegant pieces that celebrate modern love, personal style, and everyday luxury.',
+  },
+  bankInfo: {
+    accountHolder: '',
+    bankName: '',
+    accountNumber: '',
+    routingNumber: '',
+  },
+};
+
+function fallbackStoreForPath(filePath) {
+  if (filePath === productsPath) {
+    return 'products';
+  }
+  if (filePath === ordersPath) {
+    return 'orders';
+  }
+  if (filePath === bioPath) {
+    return 'bio';
+  }
+  if (filePath === bankInfoPath) {
+    return 'bankInfo';
+  }
+  return null;
+}
+
+function getMemoryFallback(filePath, fallback) {
+  const key = fallbackStoreForPath(filePath);
+  if (!key) {
+    return fallback;
+  }
+  return JSON.parse(JSON.stringify(memoryStore[key]));
+}
+
+function setMemoryFallback(filePath, data) {
+  const key = fallbackStoreForPath(filePath);
+  if (key) {
+    memoryStore[key] = JSON.parse(JSON.stringify(data));
+  }
+}
+
 app.use(express.json());
 
 function seedRuntimeFile(fileName, fallback) {
   const runtimePath = path.join(dataDir, fileName);
-  if (fs.existsSync(runtimePath)) {
-    return;
-  }
+  try {
+    if (fs.existsSync(runtimePath)) {
+      return;
+    }
 
-  const sourcePath = path.join(sourceDataDir, fileName);
-  if (fs.existsSync(sourcePath)) {
-    fs.copyFileSync(sourcePath, runtimePath);
-    return;
-  }
+    const sourcePath = path.join(sourceDataDir, fileName);
+    if (fs.existsSync(sourcePath)) {
+      fs.copyFileSync(sourcePath, runtimePath);
+      return;
+    }
 
-  writeJson(runtimePath, fallback);
+    writeJson(runtimePath, fallback);
+  } catch (error) {
+    writeJson(runtimePath, fallback);
+  }
 }
 
 function ensureDataFiles() {
-  fs.mkdirSync(dataDir, { recursive: true });
-  fs.mkdirSync(uploadsDir, { recursive: true });
+  try {
+    fs.mkdirSync(dataDir, { recursive: true });
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  } catch (error) {
+    return;
+  }
 
   seedRuntimeFile('products.json', defaultProducts);
   seedRuntimeFile('orders.json', []);
@@ -85,20 +138,24 @@ function ensureDataFiles() {
 }
 
 function readJson(filePath, fallback) {
-  if (!fs.existsSync(filePath)) {
-    return fallback;
-  }
-
   try {
+    if (!fs.existsSync(filePath)) {
+      return getMemoryFallback(filePath, fallback);
+    }
     return JSON.parse(fs.readFileSync(filePath, 'utf8'));
   } catch (error) {
-    return fallback;
+    return getMemoryFallback(filePath, fallback);
   }
 }
 
 function writeJson(filePath, data) {
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+  setMemoryFallback(filePath, data);
+  try {
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+  } catch (error) {
+    return;
+  }
 }
 
 function getAuthCredentials(req) {
@@ -147,9 +204,14 @@ function saveUploadedImage(imageFile) {
     rawContent = parts[parts.length - 1];
   }
 
-  const buffer = Buffer.from(rawContent, 'base64');
-  fs.writeFileSync(targetPath, buffer);
-  return `/uploads/${safeName}`;
+  try {
+    const buffer = Buffer.from(rawContent, 'base64');
+    fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+    fs.writeFileSync(targetPath, buffer);
+    return `/uploads/${safeName}`;
+  } catch (error) {
+    return '';
+  }
 }
 
 function applyProductUpdate(products, sku, updates) {
