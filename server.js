@@ -334,7 +334,11 @@ app.get('/backoffice', (req, res) => {
 });
 
 app.get('/', (req, res) => {
-  res.redirect('/admin');
+  const host = String(req.headers.host || '').toLowerCase();
+  if (host.includes('admin-so-bella-jewelry.vercel.app')) {
+    return res.redirect('/admin');
+  }
+  return res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 app.get('/shop', (req, res) => {

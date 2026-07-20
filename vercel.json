@@ -2,11 +2,23 @@
   "redirects": [
     {
       "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "admin-so-bella-jewelry.vercel.app"
+        }
+      ],
       "destination": "/backoffice/admin.html",
       "permanent": false
     },
     {
       "source": "/index.html",
+      "has": [
+        {
+          "type": "host",
+          "value": "admin-so-bella-jewelry.vercel.app"
+        }
+      ],
       "destination": "/backoffice/admin.html",
       "permanent": false
     }
