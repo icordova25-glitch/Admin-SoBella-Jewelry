@@ -130,16 +130,6 @@ function writeJson(filePath, data) {
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
 }
 
-function loadProductsData() {
-  const products = readJson(productsPath, []);
-  return Array.isArray(products) ? products : [];
-}
-
-function loadOrdersData() {
-  const orders = readJson(ordersPath, []);
-  return Array.isArray(orders) ? orders : [];
-}
-
 function getAuthCredentials(req) {
   const authHeader = req.headers.authorization || '';
   if (!authHeader.startsWith('Basic ')) {
@@ -235,7 +225,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 ensureDataFiles();
 
 app.get('/api/products', (req, res) => {
-  res.json(loadProductsData());
+  res.json(readJson(productsPath, []));
 });
 
 app.post('/api/orders', (req, res) => {
@@ -245,7 +235,7 @@ app.post('/api/orders', (req, res) => {
     return res.status(400).json({ error: 'Please complete the checkout form.' });
   }
 
-  const products = loadProductsData();
+  const products = readJson(productsPath, []);
   const inventoryBySku = new Map(products.map((product) => [product.sku, product]));
   const orderedItems = [];
 
@@ -274,7 +264,7 @@ app.post('/api/orders', (req, res) => {
   const shipping = subtotal > 0 ? 12 : 0;
   const total = subtotal + shipping;
 
-  const orders = loadOrdersData();
+  const orders = readJson(ordersPath, []);
   const newOrder = {
     id: `ORD-${Date.now()}`,
     customerName,
@@ -294,16 +284,16 @@ app.post('/api/orders', (req, res) => {
 });
 
 app.get('/api/orders', (req, res) => {
-  res.json(loadOrdersData());
+  res.json(readJson(ordersPath, []));
 });
 
 app.get('/api/admin/products', requireBackofficeAuth, (req, res) => {
-  res.json(loadProductsData());
+  res.json(readJson(productsPath, []));
 });
 
 app.post('/api/admin/products', requireBackofficeAuth, (req, res) => {
   const data = req.body || {};
-  const products = loadProductsData();
+  const products = readJson(productsPath, []);
   const product = {
     sku: data.sku || '',
     category: data.category || 'necklaces',
@@ -319,7 +309,7 @@ app.post('/api/admin/products', requireBackofficeAuth, (req, res) => {
 });
 
 app.put('/api/admin/products/:sku', requireBackofficeAuth, (req, res) => {
-  const products = loadProductsData();
+  const products = readJson(productsPath, []);
   const result = applyProductUpdate(products, req.params.sku, req.body || {});
   if (!result) {
     return res.status(404).json({ error: `Product ${req.params.sku} not found` });
