@@ -13,9 +13,45 @@ const shippingAddressSuggestions = document.getElementById('shippingAddressSugge
 const checkoutStatusStorageKey = 'sobella-last-payment-status';
 const addressSearchTimers = new WeakMap();
 const addressSearchControllers = new WeakMap();
+const applePayOption = paymentMethodSelect?.querySelector('option[value="apple_pay"]');
 
 function isApplePaySelected() {
   return paymentMethodSelect?.value === 'apple_pay';
+}
+
+async function canUseApplePay() {
+  if (!window.PaymentRequest) {
+    return false;
+  }
+  try {
+    const request = new PaymentRequest(
+      [{ supportedMethods: 'https://apple.com/apple-pay' }],
+      {
+        total: {
+          label: 'SoBella Jewelry',
+          amount: { currency: 'USD', value: '1.00' },
+        },
+      },
+    );
+    return Boolean(await request.canMakePayment());
+  } catch (error) {
+    return false;
+  }
+}
+
+async function initializeApplePayOption() {
+  if (!paymentMethodSelect || !applePayOption) {
+    return;
+  }
+  const supported = await canUseApplePay();
+  if (!supported) {
+    const wasSelected = paymentMethodSelect.value === 'apple_pay';
+    applePayOption.remove();
+    if (wasSelected) {
+      paymentMethodSelect.value = 'card';
+    }
+  }
+  updateCardFieldsVisibility();
 }
 
 function setCheckoutStatusForShop(status, message) {
@@ -166,22 +202,19 @@ async function requestApplePayFromIOS(cart) {
 }
 
 async function fetchAddressSuggestions(query, signal) {
-  const endpoint = `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=0&countrycodes=us&limit=6&q=${encodeURIComponent(query)}`;
+  const endpoint = `/api/address-autocomplete?q=${encodeURIComponent(query)}`;
   const response = await fetch(endpoint, {
     method: 'GET',
-    headers: {
-      Accept: 'application/json',
-    },
     signal,
   });
   if (!response.ok) {
     return [];
   }
   const results = await response.json();
-  if (!Array.isArray(results)) {
+  if (!results || !Array.isArray(results.suggestions)) {
     return [];
   }
-  return results.map((item) => item.display_name).filter(Boolean);
+  return results.suggestions;
 }
 
 function bindAddressSuggestionSearch(inputEl, datalistEl) {
@@ -390,6 +423,6 @@ bindAddressSuggestionSearch(mailingAddressInput, mailingAddressSuggestions);
 bindAddressSuggestionSearch(shippingAddressInput, shippingAddressSuggestions);
 
 loadCheckoutInfo();
-updateCardFieldsVisibility();
+initializeApplePayOption();
 updateShippingAddressVisibility();
 renderReview();

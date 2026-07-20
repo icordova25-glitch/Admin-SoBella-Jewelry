@@ -260,6 +260,33 @@ app.get('/api/products', (req, res) => {
   res.json(readJson(productsPath, []));
 });
 
+app.get('/api/address-autocomplete', async (req, res) => {
+  const query = String(req.query.q || '').trim();
+  if (query.length < 3) {
+    return res.json({ suggestions: [] });
+  }
+
+  const endpoint = `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=0&countrycodes=us&limit=6&q=${encodeURIComponent(query)}`;
+  try {
+    const response = await fetch(endpoint, {
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': 'SoBella-Jewelry-Checkout/1.0',
+      },
+    });
+    if (!response.ok) {
+      return res.status(502).json({ suggestions: [] });
+    }
+    const payload = await response.json();
+    const suggestions = Array.isArray(payload)
+      ? payload.map((item) => item.display_name).filter(Boolean)
+      : [];
+    return res.json({ suggestions });
+  } catch (error) {
+    return res.status(500).json({ suggestions: [] });
+  }
+});
+
 app.post('/api/orders', (req, res) => {
   const { customerName, email, items, paymentMethod } = req.body;
 
