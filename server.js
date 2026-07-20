@@ -238,17 +238,6 @@ app.get('/api/products', (req, res) => {
   res.json(loadProductsData());
 });
 
-app.get('/api/health', (req, res) => {
-  res.json({
-    ok: true,
-    runtimeBaseDir,
-    dataDir,
-    uploadsDir,
-    vercel: Boolean(process.env.VERCEL),
-    commit: process.env.VERCEL_GIT_COMMIT_SHA || null,
-  });
-});
-
 app.post('/api/orders', (req, res) => {
   const { customerName, email, items, paymentMethod } = req.body;
 
