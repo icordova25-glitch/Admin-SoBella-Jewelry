@@ -1,0 +1,9 @@
+{
+  "redirects": [
+    {
+      "source": "/",
+      "destination": "/backoffice/admin.html",
+      "permanent": false
+    }
+  ]
+}
