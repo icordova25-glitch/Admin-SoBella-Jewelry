@@ -1,46 +1,21 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
-const os = require('os');
 
 const app = express();
 const port = process.env.PORT || 3000;
+const isVercel = Boolean(process.env.VERCEL);
 const sourceDataDir = path.join(__dirname, 'data');
-
-function canWriteToDir(dirPath) {
-  try {
-    fs.mkdirSync(dirPath, { recursive: true });
-    fs.accessSync(dirPath, fs.constants.W_OK);
-    const probe = path.join(dirPath, '.write-probe');
-    fs.writeFileSync(probe, 'ok');
-    fs.unlinkSync(probe);
-    return true;
-  } catch (error) {
-    return false;
-  }
-}
-
-function resolveRuntimeBaseDir() {
-  if (process.env.DATA_DIR) {
-    return path.resolve(process.env.DATA_DIR);
-  }
-
-  if (canWriteToDir(sourceDataDir)) {
-    return sourceDataDir;
-  }
-
-  return path.join(os.tmpdir(), 'sobella-data');
-}
-
-const runtimeBaseDir = resolveRuntimeBaseDir();
-const dataDir = runtimeBaseDir;
+const dataDir = process.env.DATA_DIR
+  ? path.resolve(process.env.DATA_DIR)
+  : (isVercel ? path.join('/tmp', 'sobella-data') : sourceDataDir);
 const productsPath = path.join(dataDir, 'products.json');
 const ordersPath = path.join(dataDir, 'orders.json');
 const bioPath = path.join(dataDir, 'business-bio.json');
 const bankInfoPath = path.join(dataDir, 'bank-info.json');
 const uploadsDir = process.env.UPLOADS_DIR
   ? path.resolve(process.env.UPLOADS_DIR)
-  : path.join(runtimeBaseDir, 'uploads');
+  : (isVercel ? path.join('/tmp', 'sobella-uploads') : path.join(__dirname, 'uploads'));
 const backofficeUser = process.env.BACKOFFICE_USERNAME || 'admin';
 const backofficePass = process.env.BACKOFFICE_PASSWORD || 'sobella-admin';
 
