@@ -1,15 +1,26 @@
 {
-  "version": 2,
-  "builds": [
+  "redirects": [
     {
-      "src": "server.js",
-      "use": "@vercel/node"
-    }
-  ],
-  "routes": [
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "admin-so-bella-jewelry.vercel.app"
+        }
+      ],
+      "destination": "/backoffice/admin.html",
+      "permanent": false
+    },
     {
-      "src": "/(.*)",
-      "dest": "server.js"
+      "source": "/index.html",
+      "has": [
+        {
+          "type": "host",
+          "value": "admin-so-bella-jewelry.vercel.app"
+        }
+      ],
+      "destination": "/backoffice/admin.html",
+      "permanent": false
     }
   ]
 }
