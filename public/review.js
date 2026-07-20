@@ -3,7 +3,6 @@ const checkoutForm = document.getElementById('checkoutForm');
 const statusMessage = document.getElementById('statusMessage');
 const paymentMethodSelect = document.getElementById('paymentMethod');
 const cardFields = document.getElementById('cardFields');
-const applePayHint = document.getElementById('applePayHint');
 const paymentStatusPanel = document.getElementById('paymentStatusPanel');
 const shippingAddressSection = document.getElementById('shippingAddressSection');
 const sameShippingAddressCheckbox = document.querySelector('input[name="sameShippingAddress"]');
@@ -102,9 +101,12 @@ function updateCardFieldsVisibility() {
   const selected = paymentMethodSelect.value;
   const isCard = selected === 'card';
   cardFields.hidden = !isCard;
-  if (applePayHint) {
-    applePayHint.hidden = selected !== 'apple_pay';
-  }
+  cardFields.querySelectorAll('input').forEach((input) => {
+    input.disabled = !isCard;
+    if (!isCard) {
+      input.value = '';
+    }
+  });
 }
 
 function paymentMethodForApi(selectedMethod) {
