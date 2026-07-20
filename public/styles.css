@@ -39,6 +39,13 @@ body {
 .bio-section {
   padding: 0 2rem 2.25rem;
 }
+.payment-feedback-wrap {
+  padding: 0 2rem 1.25rem;
+}
+.payment-feedback-wrap .payment-status-panel {
+  max-width: 900px;
+  margin: 0 auto;
+}
 .bio-card {
   background: linear-gradient(135deg, #fffdfb 0%, #fff4eb 100%);
   border: 1px solid var(--border);

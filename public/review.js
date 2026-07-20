@@ -6,6 +6,18 @@ const cardFields = document.getElementById('cardFields');
 const paymentStatusPanel = document.getElementById('paymentStatusPanel');
 const shippingAddressSection = document.getElementById('shippingAddressSection');
 const sameShippingAddressCheckbox = document.querySelector('input[name="sameShippingAddress"]');
+const checkoutStatusStorageKey = 'sobella-last-payment-status';
+
+function setCheckoutStatusForShop(status, message) {
+  localStorage.setItem(
+    checkoutStatusStorageKey,
+    JSON.stringify({
+      status,
+      message,
+      createdAt: Date.now(),
+    }),
+  );
+}
 
 function loadCart() {
   try {
@@ -193,20 +205,24 @@ checkoutForm.addEventListener('submit', async (event) => {
 
   const result = await response.json();
   if (!response.ok) {
-    statusMessage.textContent = result.error || 'Could not complete the order.';
-    showPaymentStatus(result.error || 'Payment failed.', false);
+    const failureMessage = result.error || 'Payment was not successful.';
+    statusMessage.textContent = failureMessage;
+    showPaymentStatus(failureMessage, false);
+    setCheckoutStatusForShop('error', 'Payment was not successful.');
     return;
   }
 
   if (result.checkoutUrl) {
     statusMessage.textContent = 'Redirecting you to Stripe checkout...';
     showPaymentStatus('Payment processed successfully.', true);
+    setCheckoutStatusForShop('success', 'Payment was successful.');
     window.location.assign(result.checkoutUrl);
     return;
   }
 
   statusMessage.textContent = `Order ${result.order.id} created successfully in demo mode.`;
   showPaymentStatus(result.paymentStatus || 'Payment processed successfully.', true);
+  setCheckoutStatusForShop('success', 'Payment was successful.');
   saveCart([]);
   localStorage.removeItem('sobella-checkout-info');
   renderReview();

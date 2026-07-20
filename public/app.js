@@ -14,10 +14,38 @@ const categoryDrawer = document.getElementById('categoryDrawer');
 const drawerBackdrop = document.getElementById('drawerBackdrop');
 const drawerClose = document.getElementById('drawerClose');
 const businessBioEl = document.getElementById('businessBio');
+const paymentStatusBanner = document.getElementById('paymentStatusBanner');
 const apiBase = window.location.protocol === 'file:' ? 'http://localhost:3000' : '';
+const checkoutStatusStorageKey = 'sobella-last-payment-status';
 
 function apiUrl(path) {
   return `${apiBase}${path}`;
+}
+
+function showCheckoutStatusFromStorage() {
+  if (!paymentStatusBanner) {
+    return;
+  }
+
+  const raw = localStorage.getItem(checkoutStatusStorageKey);
+  if (!raw) {
+    return;
+  }
+
+  try {
+    const status = JSON.parse(raw);
+    if (!status || !status.message) {
+      localStorage.removeItem(checkoutStatusStorageKey);
+      return;
+    }
+    paymentStatusBanner.hidden = false;
+    paymentStatusBanner.textContent = status.message;
+    paymentStatusBanner.className = `payment-status-panel ${status.status === 'success' ? 'success' : 'error'}`;
+  } catch (error) {
+    // Ignore malformed stored payload and clear it.
+  }
+
+  localStorage.removeItem(checkoutStatusStorageKey);
 }
 
 function notifyProductRefresh() {
@@ -213,3 +241,4 @@ showReviewAndPay();
 loadProducts();
 loadBusinessBio();
 renderCart();
+showCheckoutStatusFromStorage();
