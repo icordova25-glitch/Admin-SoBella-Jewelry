@@ -6,12 +6,16 @@ const app = express();
 const port = process.env.PORT || 3000;
 const isVercel = Boolean(process.env.VERCEL);
 const sourceDataDir = path.join(__dirname, 'data');
-const dataDir = isVercel ? path.join('/tmp', 'sobella-data') : sourceDataDir;
+const dataDir = process.env.DATA_DIR
+  ? path.resolve(process.env.DATA_DIR)
+  : (isVercel ? path.join('/tmp', 'sobella-data') : sourceDataDir);
 const productsPath = path.join(dataDir, 'products.json');
 const ordersPath = path.join(dataDir, 'orders.json');
 const bioPath = path.join(dataDir, 'business-bio.json');
 const bankInfoPath = path.join(dataDir, 'bank-info.json');
-const uploadsDir = isVercel ? path.join('/tmp', 'sobella-uploads') : path.join(__dirname, 'uploads');
+const uploadsDir = process.env.UPLOADS_DIR
+  ? path.resolve(process.env.UPLOADS_DIR)
+  : (isVercel ? path.join('/tmp', 'sobella-uploads') : path.join(__dirname, 'uploads'));
 const backofficeUser = process.env.BACKOFFICE_USERNAME || 'admin';
 const backofficePass = process.env.BACKOFFICE_PASSWORD || 'sobella-admin';
 
@@ -353,6 +357,13 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-app.listen(port, () => {
-  console.log(`Jewelry store running at http://localhost:${port}`);
-});
+if (require.main === module) {
+  app.listen(port, () => {
+    console.log(`Jewelry store running at http://localhost:${port}`);
+  });
+}
+
+module.exports = {
+  app,
+  ensureDataFiles,
+};

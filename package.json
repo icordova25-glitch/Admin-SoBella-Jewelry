@@ -4,7 +4,8 @@
   "description": "A simple jewelry storefront with checkout and inventory updates",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node --test server.regression.test.js"
   },
   "dependencies": {
     "express": "^4.19.2"
