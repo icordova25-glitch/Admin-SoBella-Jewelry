@@ -182,8 +182,7 @@ function getAuthCredentials(req) {
 function requireBackofficeAuth(req, res, next) {
   const credentials = getAuthCredentials(req);
   if (!credentials || credentials.username !== backofficeUser || credentials.password !== backofficePass) {
-    res.set('WWW-Authenticate', 'Basic realm="SoBella Backoffice"');
-    return res.status(401).send('Authentication required');
+    return res.status(401).json({ error: 'Authentication required' });
   }
   return next();
 }
