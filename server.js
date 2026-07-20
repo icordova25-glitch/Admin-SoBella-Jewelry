@@ -282,7 +282,7 @@ app.put('/api/admin/products/:sku', requireBackofficeAuth, (req, res) => {
   return res.json(result);
 });
 
-app.get('/api/business-bio', requireBackofficeAuth, (req, res) => {
+app.get('/api/business-bio', (req, res) => {
   res.json(readJson(bioPath, { bio: '' }));
 });
 
@@ -324,6 +324,14 @@ app.get('/orders', (req, res) => {
 
 app.get('/backoffice', (req, res) => {
   res.redirect('/backoffice/admin.html');
+});
+
+app.get('/', (req, res) => {
+  res.redirect('/admin');
+});
+
+app.get('/shop', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 app.get('/review', (req, res) => {
