@@ -22,7 +22,10 @@ function canWriteToDir(dirPath) {
 
 function resolveRuntimeBaseDir() {
   if (process.env.DATA_DIR) {
-    return path.resolve(process.env.DATA_DIR);
+    const envDir = path.resolve(process.env.DATA_DIR);
+    if (canWriteToDir(envDir)) {
+      return envDir;
+    }
   }
 
   if (canWriteToDir(sourceDataDir)) {
@@ -38,9 +41,15 @@ const productsPath = path.join(dataDir, 'products.json');
 const ordersPath = path.join(dataDir, 'orders.json');
 const bioPath = path.join(dataDir, 'business-bio.json');
 const bankInfoPath = path.join(dataDir, 'bank-info.json');
-const uploadsDir = process.env.UPLOADS_DIR
-  ? path.resolve(process.env.UPLOADS_DIR)
-  : path.join(runtimeBaseDir, 'uploads');
+const uploadsDir = (() => {
+  if (process.env.UPLOADS_DIR) {
+    const envUploadsDir = path.resolve(process.env.UPLOADS_DIR);
+    if (canWriteToDir(envUploadsDir)) {
+      return envUploadsDir;
+    }
+  }
+  return path.join(runtimeBaseDir, 'uploads');
+})();
 const backofficeUser = process.env.BACKOFFICE_USERNAME || 'admin';
 const backofficePass = process.env.BACKOFFICE_PASSWORD || 'sobella-admin';
 
