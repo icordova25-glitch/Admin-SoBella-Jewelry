@@ -15,6 +15,7 @@ const server = app.listen(0);
 const { port } = server.address();
 const baseUrl = `http://127.0.0.1:${port}`;
 const authHeader = `Basic ${Buffer.from('admin:sobella-admin').toString('base64')}`;
+const runtimeProductsPath = path.join(process.env.DATA_DIR, 'products.json');
 
 test.after(() => {
   server.close();
@@ -115,4 +116,35 @@ test('uploaded product image is visible from shop API and image URL is served', 
   const imageResponse = await fetch(`${baseUrl}${found.image}`);
   assert.equal(imageResponse.status, 200);
   assert.equal(imageResponse.headers.get('content-type'), 'image/png');
+});
+
+test('admin product create still works when products data is malformed', async () => {
+  fs.writeFileSync(runtimeProductsPath, JSON.stringify({ bad: true }), 'utf8');
+
+  const sku = `SAFE-REG-${Date.now()}`;
+  const createResponse = await fetch(`${baseUrl}/api/admin/products`, {
+    method: 'POST',
+    headers: {
+      Authorization: authHeader,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      sku,
+      category: 'rings',
+      name: 'Recovery Product',
+      description: 'Created after malformed data',
+      price: 45,
+      stock: 1,
+    }),
+  });
+
+  assert.equal(createResponse.status, 200);
+  const created = await createResponse.json();
+  assert.equal(created.success, true);
+
+  const shopProductsResponse = await fetch(`${baseUrl}/api/products`);
+  assert.equal(shopProductsResponse.status, 200);
+  const products = await shopProductsResponse.json();
+  const found = products.find((product) => product.sku === sku);
+  assert.ok(found, 'Product should still be added after malformed data recovery');
 });
