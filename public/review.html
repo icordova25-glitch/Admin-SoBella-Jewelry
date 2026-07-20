@@ -21,18 +21,20 @@
         <form id="checkoutForm" class="checkout-form">
           <div class="checkout-section">
             <h3>Contact</h3>
-            <input type="text" name="customerName" placeholder="Your name" required />
-            <input type="email" name="email" placeholder="Email address" required />
+            <input type="text" name="customerName" placeholder="Your name" autocomplete="name" required />
+            <input type="email" name="email" placeholder="Email address" autocomplete="email" required />
           </div>
 
           <div class="checkout-section">
             <h3>Mailing address</h3>
-            <input type="text" name="mailingAddress" placeholder="Street address" required />
-            <input type="text" name="mailingCity" placeholder="City" required />
+            <input type="text" id="mailingAddress" name="mailingAddress" placeholder="Street address" list="mailingAddressSuggestions" autocomplete="billing street-address" required />
+            <datalist id="mailingAddressSuggestions"></datalist>
+            <input type="text" name="mailingCity" placeholder="City" autocomplete="billing address-level2" required />
             <div class="card-row">
-              <input type="text" name="mailingState" placeholder="State" required />
-              <input type="text" name="mailingZip" placeholder="ZIP code" required />
+              <input type="text" name="mailingState" placeholder="State" autocomplete="billing address-level1" required />
+              <input type="text" name="mailingZip" placeholder="ZIP code" autocomplete="billing postal-code" required />
             </div>
+            <small class="field-helper">Start typing an address to see suggestions.</small>
           </div>
 
           <label class="checkbox-row">
@@ -42,27 +44,31 @@
 
           <div id="shippingAddressSection" class="checkout-section" hidden>
             <h3>Shipping address</h3>
-            <input type="text" name="shippingAddress" placeholder="Street address" />
-            <input type="text" name="shippingCity" placeholder="City" />
+            <input type="text" id="shippingAddress" name="shippingAddress" placeholder="Street address" list="shippingAddressSuggestions" autocomplete="shipping street-address" />
+            <datalist id="shippingAddressSuggestions"></datalist>
+            <input type="text" name="shippingCity" placeholder="City" autocomplete="shipping address-level2" />
             <div class="card-row">
-              <input type="text" name="shippingState" placeholder="State" />
-              <input type="text" name="shippingZip" placeholder="ZIP code" />
+              <input type="text" name="shippingState" placeholder="State" autocomplete="shipping address-level1" />
+              <input type="text" name="shippingZip" placeholder="ZIP code" autocomplete="shipping postal-code" />
             </div>
+            <small class="field-helper">Search and pick a suggested shipping address.</small>
           </div>
 
           <div class="checkout-section">
             <h3>Payment</h3>
             <select name="paymentMethod" id="paymentMethod">
               <option value="card">Credit card</option>
+              <option value="apple_pay">Apple Pay</option>
               <option value="bank">Bank transfer</option>
             </select>
             <div id="cardFields" class="card-fields">
               <input type="text" name="cardNumber" inputmode="numeric" autocomplete="cc-number" placeholder="Card number" />
               <div class="card-row">
-                <input type="text" name="expiry" inputmode="numeric" placeholder="MM/YY" />
+                <input type="text" name="expiry" inputmode="numeric" autocomplete="cc-exp" placeholder="MM/YY" />
                 <input type="text" name="cvc" inputmode="numeric" autocomplete="cc-csc" placeholder="CVC" />
               </div>
             </div>
+            <small class="field-helper" id="applePayHint" hidden>Apple Pay uses secure wallet checkout on supported devices.</small>
           </div>
 
           <button type="submit">Confirm and Pay</button>

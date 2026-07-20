@@ -3,10 +3,17 @@ const checkoutForm = document.getElementById('checkoutForm');
 const statusMessage = document.getElementById('statusMessage');
 const paymentMethodSelect = document.getElementById('paymentMethod');
 const cardFields = document.getElementById('cardFields');
+const applePayHint = document.getElementById('applePayHint');
 const paymentStatusPanel = document.getElementById('paymentStatusPanel');
 const shippingAddressSection = document.getElementById('shippingAddressSection');
 const sameShippingAddressCheckbox = document.querySelector('input[name="sameShippingAddress"]');
+const mailingAddressInput = document.getElementById('mailingAddress');
+const shippingAddressInput = document.getElementById('shippingAddress');
+const mailingAddressSuggestions = document.getElementById('mailingAddressSuggestions');
+const shippingAddressSuggestions = document.getElementById('shippingAddressSuggestions');
 const checkoutStatusStorageKey = 'sobella-last-payment-status';
+const addressSearchTimers = new WeakMap();
+const addressSearchControllers = new WeakMap();
 
 function setCheckoutStatusForShop(status, message) {
   localStorage.setItem(
@@ -88,8 +95,79 @@ function loadCheckoutInfo() {
 }
 
 function updateCardFieldsVisibility() {
-  const isCard = paymentMethodSelect.value === 'card';
+  const selected = paymentMethodSelect.value;
+  const isCard = selected === 'card';
   cardFields.hidden = !isCard;
+  if (applePayHint) {
+    applePayHint.hidden = selected !== 'apple_pay';
+  }
+}
+
+function paymentMethodForApi(selectedMethod) {
+  // Apple Pay is routed through the non-card flow for compatibility with current backend.
+  if (selectedMethod === 'apple_pay') {
+    return 'bank';
+  }
+  return selectedMethod;
+}
+
+async function fetchAddressSuggestions(query, signal) {
+  const endpoint = `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=0&limit=6&q=${encodeURIComponent(query)}`;
+  const response = await fetch(endpoint, {
+    method: 'GET',
+    headers: {
+      Accept: 'application/json',
+    },
+    signal,
+  });
+  if (!response.ok) {
+    return [];
+  }
+  const results = await response.json();
+  if (!Array.isArray(results)) {
+    return [];
+  }
+  return results.map((item) => item.display_name).filter(Boolean);
+}
+
+function bindAddressSuggestionSearch(inputEl, datalistEl) {
+  if (!inputEl || !datalistEl) {
+    return;
+  }
+
+  inputEl.addEventListener('input', () => {
+    const query = inputEl.value.trim();
+
+    const prevTimer = addressSearchTimers.get(inputEl);
+    if (prevTimer) {
+      clearTimeout(prevTimer);
+    }
+
+    const prevController = addressSearchControllers.get(inputEl);
+    if (prevController) {
+      prevController.abort();
+    }
+
+    if (query.length < 4) {
+      datalistEl.innerHTML = '';
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      const controller = new AbortController();
+      addressSearchControllers.set(inputEl, controller);
+      try {
+        const suggestions = await fetchAddressSuggestions(query, controller.signal);
+        datalistEl.innerHTML = suggestions
+          .map((value) => `<option value="${value.replace(/"/g, '&quot;')}"></option>`)
+          .join('');
+      } catch (error) {
+        datalistEl.innerHTML = '';
+      }
+    }, 250);
+
+    addressSearchTimers.set(inputEl, timer);
+  });
 }
 
 function updateShippingAddressVisibility() {
@@ -176,7 +254,8 @@ checkoutForm.addEventListener('submit', async (event) => {
   const payload = {
     customerName: checkoutForm.customerName.value,
     email: checkoutForm.email.value,
-    paymentMethod: checkoutForm.paymentMethod.value,
+    paymentMethod: paymentMethodForApi(checkoutForm.paymentMethod.value),
+    paymentWallet: checkoutForm.paymentMethod.value === 'apple_pay' ? 'apple_pay' : null,
     mailingAddress: {
       address: checkoutForm.mailingAddress?.value || '',
       city: checkoutForm.mailingCity?.value || '',
@@ -237,6 +316,9 @@ if (paymentMethodSelect) {
 if (sameShippingAddressCheckbox) {
   sameShippingAddressCheckbox.addEventListener('change', updateShippingAddressVisibility);
 }
+
+bindAddressSuggestionSearch(mailingAddressInput, mailingAddressSuggestions);
+bindAddressSuggestionSearch(shippingAddressInput, shippingAddressSuggestions);
 
 loadCheckoutInfo();
 updateCardFieldsVisibility();

@@ -235,6 +235,11 @@ body.drawer-open .drawer-backdrop {
   font-size: 1rem;
   color: var(--text);
 }
+.field-helper {
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.4;
+}
 .checkbox-row {
   display: flex;
   align-items: center;
