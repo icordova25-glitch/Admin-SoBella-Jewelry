@@ -1,0 +1,22 @@
+[
+  {
+    "id": "ORD-1",
+    "customerName": "Test Buyer",
+    "email": "test@example.com",
+    "items": [
+      {
+        "sku": "EARR-001",
+        "name": "Pearl Drop Earrings",
+        "quantity": 1,
+        "price": 89,
+        "lineTotal": 89
+      }
+    ],
+    "paymentMethod": "card",
+    "status": "paid",
+    "total": 101,
+    "source": "demo",
+    "paymentId": null,
+    "createdAt": "2026-07-20T03:12:53.623997+00:00"
+  }
+]

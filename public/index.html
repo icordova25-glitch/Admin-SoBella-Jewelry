@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Shop elegant handmade jewelry at SoBella Jewelry, including necklaces, rings, earrings, and bracelets crafted for timeless style." />
+    <meta name="keywords" content="jewelry, handmade jewelry, necklaces, rings, earrings, bracelets, SoBella Jewelry" />
+    <meta property="og:title" content="SoBella Jewelry | Elegant Handmade Jewelry" />
+    <meta property="og:description" content="Discover timeless jewelry pieces crafted for everyday luxury and special occasions." />
+    <meta property="og:type" content="website" />
+    <meta name="robots" content="index,follow" />
+    <title>SoBella Jewelry | Elegant Handmade Jewelry</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <nav class="top-nav">
+      <a href="/">Shop</a>
+      <a href="/admin">Admin</a>
+      <a href="/orders">Orders</a>
+      <a href="/review">Review</a>
+    </nav>
+
+    <header class="hero" role="banner">
+      <div class="hero-content">
+        <p class="eyebrow">Handmade jewelry for modern romance</p>
+        <h1>SoBella Jewelry</h1>
+        <p class="hero-subtext">Discover timeless necklaces, rings, earrings, and bracelets designed to celebrate life’s most meaningful moments.</p>
+      </div>
+    </header>
+
+    <section class="bio-section" aria-labelledby="about-sobella">
+      <div class="bio-card">
+        <h2 id="about-sobella">About SoBella</h2>
+        <p id="businessBio">Loading business description...</p>
+      </div>
+    </section>
+
+    <main class="layout">
+      <button class="mobile-category-toggle" id="mobileCategoryToggle" type="button">Browse categories</button>
+      <div class="drawer-backdrop" id="drawerBackdrop"></div>
+      <aside class="sidebar" id="categoryDrawer">
+        <div class="sidebar-head">
+          <h2>Shop by category</h2>
+          <button class="drawer-close" id="drawerClose" type="button" aria-label="Close categories">×</button>
+        </div>
+        <nav class="category-menu">
+          <button class="category-btn active" data-category="all">All products</button>
+          <button class="category-btn" data-category="necklaces">Necklaces</button>
+          <button class="category-btn" data-category="rings">Rings</button>
+          <button class="category-btn" data-category="earings">Earrings</button>
+          <button class="category-btn" data-category="bracelets">Bracelets</button>
+        </nav>
+      </aside>
+
+      <section aria-labelledby="collection-heading">
+        <h2 id="collection-heading">Our collection</h2>
+        <p class="section-copy">Browse elegant handmade jewelry made to shine for everyday wear and special occasions.</p>
+        <div id="products" class="products"></div>
+      </section>
+
+      <aside class="checkout-card">
+        <h2>Bag</h2>
+        <p>Review your selections before checkout.</p>
+        <div class="checkout-form">
+          <button class="review-pay-btn" id="reviewPayButton" type="button">Review and Pay</button>
+        </div>
+        <p id="statusMessage" class="status"></p>
+      </aside>
+    </main>
+
+    <script src="app.js"></script>
+    <script type="application/ld+json" id="product-schema"></script>
+    <script>
+      fetch('/api/schema/products')
+        .then((response) => response.json())
+        .then((data) => {
+          const script = document.getElementById('product-schema');
+          if (script) {
+            script.textContent = JSON.stringify(data);
+          }
+        })
+        .catch(() => {});
+    </script>
+  </body>
+</html>

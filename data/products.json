@@ -1,0 +1,29 @@
+[
+  {
+    "sku": "EARR-001",
+    "category": "rings",
+    "name": "Pearl Drop Earrings",
+    "description": "Elegant pearl earrings for special occasions.",
+    "price": 89,
+    "stock": 11,
+    "image": ""
+  },
+  {
+    "sku": "NECK-001",
+    "category": "necklaces",
+    "name": "Gold Chain Necklace",
+    "description": "Layered gold necklace with a modern finish.",
+    "price": 120,
+    "stock": 8,
+    "image": ""
+  },
+  {
+    "sku": "RING-001",
+    "category": "rings",
+    "name": "Diamond Accent Ring",
+    "description": "A refined ring with a subtle sparkle.",
+    "price": 150,
+    "stock": 5,
+    "image": ""
+  }
+]

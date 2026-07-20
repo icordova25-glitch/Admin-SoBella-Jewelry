@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Review your jewelry order and complete checkout securely at SoBella Jewelry." />
+    <meta name="robots" content="noindex,follow" />
+    <title>Review & Pay | SoBella Jewelry</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <nav class="top-nav">
+      <a href="/">Shop</a>
+      <a href="/admin">Admin</a>
+      <a href="/orders">Orders</a>
+      <a href="/review">Review</a>
+    </nav>
+
+    <main class="page-shell">
+      <h1>Review and Pay</h1>
+      <div id="reviewItems" class="orders-list"></div>
+      <div class="checkout-card" style="margin-top: 1rem;">
+        <form id="checkoutForm" class="checkout-form">
+          <div class="checkout-section">
+            <h3>Contact</h3>
+            <input type="text" name="customerName" placeholder="Your name" required />
+            <input type="email" name="email" placeholder="Email address" required />
+          </div>
+
+          <div class="checkout-section">
+            <h3>Mailing address</h3>
+            <input type="text" name="mailingAddress" placeholder="Street address" required />
+            <input type="text" name="mailingCity" placeholder="City" required />
+            <div class="card-row">
+              <input type="text" name="mailingState" placeholder="State" required />
+              <input type="text" name="mailingZip" placeholder="ZIP code" required />
+            </div>
+          </div>
+
+          <label class="checkbox-row">
+            <input type="checkbox" name="sameShippingAddress" checked />
+            <span>Is shipping address the same as mailing address?</span>
+          </label>
+
+          <div id="shippingAddressSection" class="checkout-section" hidden>
+            <h3>Shipping address</h3>
+            <input type="text" name="shippingAddress" placeholder="Street address" />
+            <input type="text" name="shippingCity" placeholder="City" />
+            <div class="card-row">
+              <input type="text" name="shippingState" placeholder="State" />
+              <input type="text" name="shippingZip" placeholder="ZIP code" />
+            </div>
+          </div>
+
+          <div class="checkout-section">
+            <h3>Payment</h3>
+            <select name="paymentMethod" id="paymentMethod">
+              <option value="card">Credit card</option>
+              <option value="bank">Bank transfer</option>
+            </select>
+            <div id="cardFields" class="card-fields">
+              <input type="text" name="cardNumber" inputmode="numeric" autocomplete="cc-number" placeholder="Card number" />
+              <div class="card-row">
+                <input type="text" name="expiry" inputmode="numeric" placeholder="MM/YY" />
+                <input type="text" name="cvc" inputmode="numeric" autocomplete="cc-csc" placeholder="CVC" />
+              </div>
+            </div>
+          </div>
+
+          <button type="submit">Confirm and Pay</button>
+        </form>
+        <div id="paymentStatusPanel" class="payment-status-panel" hidden></div>
+        <p id="statusMessage" class="status"></p>
+      </div>
+    </main>
+
+    <script src="review.js"></script>
+  </body>
+</html>
