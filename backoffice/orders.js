@@ -1,7 +1,12 @@
 const ordersList = document.getElementById('ordersList');
+const apiBase = window.location.protocol === 'file:' ? 'http://localhost:3001' : window.location.origin;
+
+function apiUrl(path) {
+  return `${apiBase}${path}`;
+}
 
 async function loadOrders() {
-  const response = await fetch('/api/orders');
+  const response = await fetch(apiUrl('/api/orders'));
   const orders = await response.json();
   ordersList.innerHTML = '';
 

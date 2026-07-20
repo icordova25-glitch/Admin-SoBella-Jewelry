@@ -90,6 +90,26 @@ app.get('/api/orders', (req, res) => {
   res.json(readJson(ordersPath, []));
 });
 
+app.get('/admin', (req, res) => {
+  res.status(404).send('Not Found');
+});
+
+app.get('/orders', (req, res) => {
+  res.status(404).send('Not Found');
+});
+
+app.get('/backoffice', (req, res) => {
+  res.status(404).send('Not Found');
+});
+
+app.get('/backoffice/*', (req, res) => {
+  res.status(404).send('Not Found');
+});
+
+app.get('/review', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'review.html'));
+});
+
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });

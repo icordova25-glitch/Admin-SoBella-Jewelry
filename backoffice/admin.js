@@ -5,6 +5,11 @@ const bioText = document.getElementById('bioText');
 const bioCount = document.getElementById('bioCount');
 const bankForm = document.getElementById('bankForm');
 const productRefreshChannel = window.BroadcastChannel ? new BroadcastChannel('sobella-products') : null;
+const apiBase = window.location.protocol === 'file:' ? 'http://localhost:3001' : window.location.origin;
+
+function apiUrl(path) {
+  return `${apiBase}${path}`;
+}
 
 function notifyProductRefresh() {
   if (productRefreshChannel) {
@@ -14,7 +19,7 @@ function notifyProductRefresh() {
 }
 
 async function loadBusinessBio() {
-  const response = await fetch('/api/business-bio');
+  const response = await fetch(apiUrl('/api/business-bio'));
   const data = await response.json();
   if (bioText) {
     bioText.value = data.bio || '';
@@ -25,7 +30,7 @@ async function loadBusinessBio() {
 }
 
 async function loadBankInfo() {
-  const response = await fetch('/api/business-bank-info');
+  const response = await fetch(apiUrl('/api/business-bank-info'));
   const data = await response.json();
   if (bankForm) {
     bankForm.querySelector('#accountHolder').value = data.accountHolder || '';
@@ -36,7 +41,7 @@ async function loadBankInfo() {
 }
 
 async function loadAdminProducts() {
-  const response = await fetch('/api/admin/products');
+  const response = await fetch(apiUrl('/api/admin/products'));
   const products = await response.json();
   adminProducts.innerHTML = '';
 
@@ -123,7 +128,7 @@ function showImagePreview(imageUrl) {
 }
 
 async function updateStock(sku, action) {
-  const response = await fetch(`/api/admin/products/${sku}`, {
+  const response = await fetch(apiUrl(`/api/admin/products/${sku}`), {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ stock: action === 'restock' ? 1 : -1, operation: action }),
@@ -144,7 +149,7 @@ if (bioForm && bioText) {
 
   bioForm.addEventListener('submit', async (event) => {
     event.preventDefault();
-    await fetch('/api/business-bio', {
+    await fetch(apiUrl('/api/business-bio'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ bio: bioText.value.slice(0, 500) }),
@@ -156,7 +161,7 @@ if (bioForm && bioText) {
 if (bankForm) {
   bankForm.addEventListener('submit', async (event) => {
     event.preventDefault();
-    await fetch('/api/business-bank-info', {
+    await fetch(apiUrl('/api/business-bank-info'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -190,7 +195,7 @@ productForm.addEventListener('submit', async (event) => {
     };
   }
 
-  await fetch('/api/admin/products', {
+  await fetch(apiUrl('/api/admin/products'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -201,4 +206,5 @@ productForm.addEventListener('submit', async (event) => {
 });
 
 loadAdminProducts();
+loadBusinessBio();
 loadBankInfo();

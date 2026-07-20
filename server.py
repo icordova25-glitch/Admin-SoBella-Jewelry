@@ -156,7 +156,7 @@ def load_products():
 
 def build_sitemap_xml():
     base_url = 'https://localhost:3000'
-    paths = ['/', '/orders', '/review']
+    paths = ['/', '/review']
     products = load_products()
     for product in products:
         paths.append(f"/product/{product['sku']}")
@@ -421,8 +421,8 @@ def create_checkout_session(customer_name, email, items, payment_method='card'):
             'quantity': 1,
         })
 
-    success_url = os.getenv('STRIPE_SUCCESS_URL', 'http://localhost:3000/orders')
-    cancel_url = os.getenv('STRIPE_CANCEL_URL', 'http://localhost:3000/')
+    success_url = os.getenv('STRIPE_SUCCESS_URL', 'http://localhost:3000/review')
+    cancel_url = os.getenv('STRIPE_CANCEL_URL', 'http://localhost:3000/review')
     session = stripe_client.checkout.Session.create(
         mode='payment',
         line_items=line_items,
@@ -440,11 +440,21 @@ def create_checkout_session(customer_name, email, items, payment_method='card'):
 
 
 class JewelryHandler(BaseHTTPRequestHandler):
+    def send_cors_headers(self):
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, PUT, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+
     def do_GET(self):
         self.dispatch_request(include_body=True)
 
     def do_HEAD(self):
         self.dispatch_request(include_body=False)
+
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self.send_cors_headers()
+        self.end_headers()
 
     def dispatch_request(self, include_body=True):
         parsed = urlparse(self.path)
@@ -638,15 +648,18 @@ class JewelryHandler(BaseHTTPRequestHandler):
                 self.send_file(upload_path, include_body=include_body)
                 return
         if path in ('/admin', '/admin.html'):
-            self.send_file(PUBLIC / 'admin.html', include_body=include_body)
+            self.send_not_found()
             return
         if path in ('/review', '/review.html'):
             self.send_file(PUBLIC / 'review.html', include_body=include_body)
             return
         if path in ('/orders', '/orders.html'):
-            self.send_file(PUBLIC / 'orders.html', include_body=include_body)
+            self.send_not_found()
             return
-        if path in ('/styles.css', '/app.js', '/admin.js', '/orders.js'):
+        if path in ('/backoffice', '/backoffice/') or path.startswith('/backoffice/'):
+            self.send_not_found()
+            return
+        if path in ('/styles.css', '/app.js', '/review.js'):
             self.send_file(PUBLIC / path.lstrip('/'), include_body=include_body)
             return
         file_path = PUBLIC / path.lstrip('/')
@@ -678,6 +691,7 @@ class JewelryHandler(BaseHTTPRequestHandler):
             content_type = 'application/octet-stream'
         body = file_path.read_bytes()
         self.send_response(200)
+        self.send_cors_headers()
         self.send_header('Content-Type', content_type)
         self.send_header('Content-Length', str(len(body)))
         self.end_headers()
@@ -687,6 +701,7 @@ class JewelryHandler(BaseHTTPRequestHandler):
     def send_json(self, payload, status=200, include_body=True):
         body = json.dumps(payload).encode('utf-8')
         self.send_response(status)
+        self.send_cors_headers()
         self.send_header('Content-Type', 'application/json; charset=utf-8')
         self.send_header('Content-Length', str(len(body)))
         self.end_headers()
@@ -696,7 +711,17 @@ class JewelryHandler(BaseHTTPRequestHandler):
     def send_xml(self, payload, status=200, include_body=True):
         body = payload.encode('utf-8')
         self.send_response(status)
+        self.send_cors_headers()
         self.send_header('Content-Type', 'application/xml; charset=utf-8')
+        self.send_header('Content-Length', str(len(body)))
+        self.end_headers()
+        if include_body:
+            self.wfile.write(body)
+
+    def send_not_found(self, include_body=True):
+        body = b'Not Found'
+        self.send_response(404)
+        self.send_header('Content-Type', 'text/plain; charset=utf-8')
         self.send_header('Content-Length', str(len(body)))
         self.end_headers()
         if include_body:

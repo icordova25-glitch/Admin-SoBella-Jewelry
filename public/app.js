@@ -14,6 +14,11 @@ const categoryDrawer = document.getElementById('categoryDrawer');
 const drawerBackdrop = document.getElementById('drawerBackdrop');
 const drawerClose = document.getElementById('drawerClose');
 const businessBioEl = document.getElementById('businessBio');
+const apiBase = window.location.protocol === 'file:' ? 'http://localhost:3000' : '';
+
+function apiUrl(path) {
+  return `${apiBase}${path}`;
+}
 
 function notifyProductRefresh() {
   if (productRefreshChannel) {
@@ -23,13 +28,13 @@ function notifyProductRefresh() {
 }
 
 async function loadProducts() {
-  const response = await fetch('/api/products');
+  const response = await fetch(apiUrl('/api/products'));
   state.products = await response.json();
   renderProducts();
 }
 
 async function loadBusinessBio() {
-  const response = await fetch('/api/business-bio');
+  const response = await fetch(apiUrl('/api/business-bio'));
   const data = await response.json();
   if (businessBioEl) {
     businessBioEl.textContent = data.bio || 'A modern jewelry studio crafting elegant pieces with timeless beauty.';
@@ -128,22 +133,28 @@ function showImagePreview(imageUrl) {
 
 function showReviewAndPay() {
   if (cartSection) {
-    const existing = cartSection.querySelector('.review-pay-btn');
-    if (existing) {
+    let reviewButton = cartSection.querySelector('.review-pay-btn');
+
+    if (!reviewButton) {
+      reviewButton = document.createElement('button');
+      reviewButton.className = 'review-pay-btn';
+      reviewButton.type = 'button';
+      reviewButton.textContent = 'Review and Pay';
+      cartSection.appendChild(reviewButton);
+    }
+
+    if (reviewButton.dataset.bound === 'true') {
       return;
     }
-    const reviewButton = document.createElement('button');
-    reviewButton.className = 'review-pay-btn';
-    reviewButton.type = 'button';
-    reviewButton.textContent = 'Review and Pay';
+
     reviewButton.addEventListener('click', () => {
       if (state.cart.length === 0) {
         statusMessage.textContent = 'Add at least one item to your bag first.';
         return;
       }
-      window.location.href = '/review';
+      window.location.href = 'review.html';
     });
-    cartSection.appendChild(reviewButton);
+    reviewButton.dataset.bound = 'true';
   }
 }
 
