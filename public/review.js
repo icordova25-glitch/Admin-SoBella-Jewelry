@@ -15,6 +15,10 @@ const checkoutStatusStorageKey = 'sobella-last-payment-status';
 const addressSearchTimers = new WeakMap();
 const addressSearchControllers = new WeakMap();
 
+function isApplePaySelected() {
+  return paymentMethodSelect?.value === 'apple_pay';
+}
+
 function setCheckoutStatusForShop(status, message) {
   localStorage.setItem(
     checkoutStatusStorageKey,
@@ -104,15 +108,63 @@ function updateCardFieldsVisibility() {
 }
 
 function paymentMethodForApi(selectedMethod) {
-  // Apple Pay is routed through the non-card flow for compatibility with current backend.
-  if (selectedMethod === 'apple_pay') {
-    return 'bank';
-  }
   return selectedMethod;
 }
 
+function calculateOrderTotals(cart) {
+  const subtotal = cart.reduce((sum, item) => sum + (Number(item.price || 0) * Number(item.quantity || 0)), 0);
+  const shipping = subtotal > 0 ? 12 : 0;
+  const total = subtotal + shipping;
+  return { subtotal, shipping, total };
+}
+
+async function requestApplePayFromIOS(cart) {
+  if (!window.PaymentRequest) {
+    throw new Error('Apple Pay is only available in supported iOS/Safari browsers.');
+  }
+
+  const { subtotal, shipping, total } = calculateOrderTotals(cart);
+  const methodData = [
+    {
+      supportedMethods: 'https://apple.com/apple-pay',
+      data: {
+        version: 3,
+        merchantIdentifier: 'merchant.sobella.demo',
+        merchantCapabilities: ['supports3DS'],
+        supportedNetworks: ['visa', 'masterCard', 'amex', 'discover'],
+        countryCode: 'US',
+      },
+    },
+  ];
+
+  const details = {
+    displayItems: [
+      { label: 'Items', amount: { currency: 'USD', value: subtotal.toFixed(2) } },
+      { label: 'Shipping', amount: { currency: 'USD', value: shipping.toFixed(2) } },
+    ],
+    total: {
+      label: 'SoBella Jewelry',
+      amount: { currency: 'USD', value: total.toFixed(2) },
+    },
+  };
+
+  const request = new PaymentRequest(methodData, details, {
+    requestPayerName: true,
+    requestPayerEmail: true,
+  });
+
+  const canPay = await request.canMakePayment().catch(() => false);
+  if (!canPay) {
+    throw new Error('Apple Pay is not available on this device/account.');
+  }
+
+  const paymentResponse = await request.show();
+  await paymentResponse.complete('success');
+  return paymentResponse;
+}
+
 async function fetchAddressSuggestions(query, signal) {
-  const endpoint = `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=0&limit=6&q=${encodeURIComponent(query)}`;
+  const endpoint = `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=0&countrycodes=us&limit=6&q=${encodeURIComponent(query)}`;
   const response = await fetch(endpoint, {
     method: 'GET',
     headers: {
@@ -250,10 +302,24 @@ checkoutForm.addEventListener('submit', async (event) => {
     return;
   }
 
-  statusMessage.textContent = 'Preparing secure checkout...';
+  statusMessage.textContent = isApplePaySelected() ? 'Opening Apple Pay...' : 'Preparing secure checkout...';
+
+  let applePayResult = null;
+  if (isApplePaySelected()) {
+    try {
+      applePayResult = await requestApplePayFromIOS(cart);
+    } catch (error) {
+      const failureMessage = error?.message || 'Payment was not successful.';
+      statusMessage.textContent = failureMessage;
+      showPaymentStatus(failureMessage, false);
+      setCheckoutStatusForShop('error', 'Payment was not successful.');
+      return;
+    }
+  }
+
   const payload = {
-    customerName: checkoutForm.customerName.value,
-    email: checkoutForm.email.value,
+    customerName: checkoutForm.customerName.value || applePayResult?.payerName || '',
+    email: checkoutForm.email.value || applePayResult?.payerEmail || '',
     paymentMethod: paymentMethodForApi(checkoutForm.paymentMethod.value),
     paymentWallet: checkoutForm.paymentMethod.value === 'apple_pay' ? 'apple_pay' : null,
     mailingAddress: {
@@ -268,7 +334,7 @@ checkoutForm.addEventListener('submit', async (event) => {
       state: checkoutForm.shippingState?.value || '',
       zip: checkoutForm.shippingZip?.value || '',
     },
-    cardData: {
+    cardData: isApplePaySelected() ? {} : {
       cardNumber: checkoutForm.cardNumber?.value || '',
       expiry: checkoutForm.expiry?.value || '',
       cvc: checkoutForm.cvc?.value || '',
@@ -276,7 +342,8 @@ checkoutForm.addEventListener('submit', async (event) => {
     items: cart.map((item) => ({ sku: item.sku, quantity: item.quantity })),
   };
 
-  const response = await fetch('/api/checkout/create-session', {
+  const endpoint = isApplePaySelected() ? '/api/orders' : '/api/checkout/create-session';
+  const response = await fetch(endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
