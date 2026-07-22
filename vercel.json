@@ -8,6 +8,13 @@
   ],
   "routes": [
     {
+      "src": "/",
+      "status": 302,
+      "headers": {
+        "Location": "/admin"
+      }
+    },
+    {
       "src": "/admin/?",
       "status": 302,
       "headers": {
