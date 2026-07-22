@@ -9,9 +9,12 @@ const adminUsername = document.getElementById('adminUsername');
 const adminPassword = document.getElementById('adminPassword');
 const loginStatus = document.getElementById('loginStatus');
 const logoutButton = document.getElementById('logoutButton');
+const loginSubmitButton = document.getElementById('loginSubmitButton');
+const adminLoginHeading = document.getElementById('adminLoginHeading');
 const productRefreshChannel = window.BroadcastChannel ? new BroadcastChannel('sobella-products') : null;
 const apiBase = window.location.protocol === 'file:' ? 'http://localhost:3001' : window.location.origin;
 const backofficeAuth = window.sobellaBackofficeAuth;
+let hasAuthenticatedSession = false;
 
 function apiUrl(path) {
   return `${apiBase}${path}`;
@@ -36,7 +39,26 @@ function updateLoginForm() {
   if (logoutButton) {
     logoutButton.disabled = !credentials;
   }
-  setLoginStatus(credentials ? `Signed in as ${credentials.username}` : 'Sign in to load and update backoffice data.');
+
+  if (hasAuthenticatedSession) {
+    setLoginStatus(credentials ? `Signed in as ${credentials.username}` : 'Signed in.');
+  } else {
+    setLoginStatus(credentials ? `Signed in as ${credentials.username}` : 'Sign in to load and update backoffice data.');
+  }
+
+  const hideLoginFields = Boolean(credentials && hasAuthenticatedSession);
+  if (adminLoginHeading) {
+    adminLoginHeading.style.display = hideLoginFields ? 'none' : '';
+  }
+  if (adminUsername) {
+    adminUsername.style.display = hideLoginFields ? 'none' : '';
+  }
+  if (adminPassword) {
+    adminPassword.style.display = hideLoginFields ? 'none' : '';
+  }
+  if (loginSubmitButton) {
+    loginSubmitButton.style.display = hideLoginFields ? 'none' : '';
+  }
 }
 
 async function backofficeRequest(path, options = {}) {
@@ -45,19 +67,7 @@ async function backofficeRequest(path, options = {}) {
   }
   const response = await backofficeAuth.fetch(apiUrl(path), options);
   if (!response.ok) {
-    const contentType = response.headers.get('content-type') || '';
-    let message = '';
-    if (contentType.includes('application/json')) {
-      try {
-        const payload = await response.json();
-        message = payload.error || payload.message || '';
-      } catch (error) {
-        message = '';
-      }
-    } else {
-      const raw = await response.text();
-      message = raw.includes('<') ? '' : raw;
-    }
+    const message = await response.text();
     throw new Error(message || `Request failed with status ${response.status}`);
   }
   return response;
@@ -195,8 +205,11 @@ async function updateStock(sku, action) {
 async function loadBackofficeData() {
   try {
     await Promise.all([loadAdminProducts(), loadBusinessBio(), loadBankInfo()]);
+    hasAuthenticatedSession = true;
     updateLoginForm();
   } catch (error) {
+    hasAuthenticatedSession = false;
+    updateLoginForm();
     setLoginStatus(error.message || 'Sign in required.', true);
   }
 }
@@ -299,6 +312,7 @@ if (loginForm) {
 if (logoutButton) {
   logoutButton.addEventListener('click', () => {
     backofficeAuth.clearCredentials();
+    hasAuthenticatedSession = false;
     if (adminPassword) {
       adminPassword.value = '';
     }

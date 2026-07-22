@@ -4,8 +4,11 @@ const ordersUsername = document.getElementById('ordersUsername');
 const ordersPassword = document.getElementById('ordersPassword');
 const ordersLoginStatus = document.getElementById('ordersLoginStatus');
 const ordersLogoutButton = document.getElementById('ordersLogoutButton');
+const ordersLoginSubmitButton = document.getElementById('ordersLoginSubmitButton');
+const ordersLoginHeading = document.getElementById('ordersLoginHeading');
 const apiBase = window.location.protocol === 'file:' ? 'http://localhost:3001' : window.location.origin;
 const backofficeAuth = window.sobellaBackofficeAuth;
+let hasAuthenticatedSession = false;
 
 function apiUrl(path) {
   return `${apiBase}${path}`;
@@ -30,7 +33,26 @@ function updateOrdersLoginForm() {
   if (ordersLogoutButton) {
     ordersLogoutButton.disabled = !credentials;
   }
-  setOrdersStatus(credentials ? `Signed in as ${credentials.username}` : 'Sign in to load order history.');
+
+  if (hasAuthenticatedSession) {
+    setOrdersStatus(credentials ? `Signed in as ${credentials.username}` : 'Signed in.');
+  } else {
+    setOrdersStatus(credentials ? `Signed in as ${credentials.username}` : 'Sign in to load order history.');
+  }
+
+  const hideLoginFields = Boolean(credentials && hasAuthenticatedSession);
+  if (ordersLoginHeading) {
+    ordersLoginHeading.style.display = hideLoginFields ? 'none' : '';
+  }
+  if (ordersUsername) {
+    ordersUsername.style.display = hideLoginFields ? 'none' : '';
+  }
+  if (ordersPassword) {
+    ordersPassword.style.display = hideLoginFields ? 'none' : '';
+  }
+  if (ordersLoginSubmitButton) {
+    ordersLoginSubmitButton.style.display = hideLoginFields ? 'none' : '';
+  }
 }
 
 async function backofficeRequest(path, options = {}) {
@@ -69,6 +91,18 @@ async function loadOrders() {
   ordersList.innerHTML = cards;
 }
 
+async function loadOrdersWithAuthState() {
+  try {
+    await loadOrders();
+    hasAuthenticatedSession = true;
+    updateOrdersLoginForm();
+  } catch (error) {
+    hasAuthenticatedSession = false;
+    updateOrdersLoginForm();
+    throw error;
+  }
+}
+
 if (ordersLoginForm) {
   ordersLoginForm.addEventListener('submit', (event) => {
     event.preventDefault();
@@ -80,13 +114,14 @@ if (ordersLoginForm) {
     }
     backofficeAuth.setCredentials(username, password);
     updateOrdersLoginForm();
-    loadOrders().catch((error) => setOrdersStatus(error.message, true));
+    loadOrdersWithAuthState().catch((error) => setOrdersStatus(error.message, true));
   });
 }
 
 if (ordersLogoutButton) {
   ordersLogoutButton.addEventListener('click', () => {
     backofficeAuth.clearCredentials();
+    hasAuthenticatedSession = false;
     if (ordersPassword) {
       ordersPassword.value = '';
     }
@@ -96,7 +131,7 @@ if (ordersLogoutButton) {
 }
 
 updateOrdersLoginForm();
-loadOrders().catch((error) => {
+loadOrdersWithAuthState().catch((error) => {
   setOrdersStatus(error.message, true);
   ordersList.innerHTML = '<p>Unable to load order history.</p>';
 });
