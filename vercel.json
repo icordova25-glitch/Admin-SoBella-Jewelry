@@ -1,26 +1,43 @@
 {
-  "redirects": [
+  "version": 2,
+  "builds": [
     {
-      "source": "/",
-      "has": [
-        {
-          "type": "host",
-          "value": "admin-so-bella-jewelry.vercel.app"
-        }
-      ],
-      "destination": "/backoffice/admin.html",
-      "permanent": false
+      "src": "server.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/admin/?",
+      "status": 302,
+      "headers": {
+        "Location": "/backoffice/admin.html"
+      }
     },
     {
-      "source": "/index.html",
-      "has": [
-        {
-          "type": "host",
-          "value": "admin-so-bella-jewelry.vercel.app"
-        }
-      ],
-      "destination": "/backoffice/admin.html",
-      "permanent": false
+      "src": "/orders/?",
+      "status": 302,
+      "headers": {
+        "Location": "/backoffice/orders.html"
+      }
+    },
+    {
+      "src": "/backoffice/admin/?",
+      "status": 302,
+      "headers": {
+        "Location": "/backoffice/admin.html"
+      }
+    },
+    {
+      "src": "/backoffice/orders/?",
+      "status": 302,
+      "headers": {
+        "Location": "/backoffice/orders.html"
+      }
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/server.js"
     }
   ]
 }
