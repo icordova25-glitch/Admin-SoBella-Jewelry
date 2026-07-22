@@ -13,6 +13,8 @@ from server import (
     load_business_bank_info,
     load_business_bio,
     load_products,
+    load_site_access,
+    save_site_access,
     read_json,
     resolve_path,
     save_business_bank_info,
@@ -70,8 +72,35 @@ def validate_password_strength(password):
 
 
 class BackofficeHandler(BaseHTTPRequestHandler):
+    def is_owner_authorized(self):
+        secret = str(os.getenv('SITE_ACCESS_TOGGLE_KEY', '')).strip() or str(os.getenv('OWNER_ACCESS_KEY', '')).strip()
+        if not secret:
+            return False
+        return self.headers.get('X-Site-Access-Key', '').strip() == secret
+
+    def write_site_disabled_response(self, include_body=True):
+        access = load_site_access()
+        if self.path.startswith('/api/'):
+            self.send_json({
+                'error': 'Site access is currently disabled.',
+                'reason': access.get('reason', ''),
+                'code': 'SITE_DISABLED',
+            }, status=402, include_body=include_body)
+            return
+
+        body = b'Site temporarily unavailable due to billing status.'
+        self.send_response(402)
+        self.send_header('Content-Type', 'text/plain; charset=utf-8')
+        self.send_header('Content-Length', str(len(body)))
+        self.end_headers()
+        if include_body:
+            self.wfile.write(body)
+
     def do_GET(self):
         parsed = urlparse(self.path)
+        if parsed.path != '/api/owner/site-access' and load_site_access().get('enabled') is False:
+            self.write_site_disabled_response()
+            return
         if parsed.path.startswith('/api/') and not self.is_authorized():
             self.send_unauthorized()
             return
@@ -79,6 +108,9 @@ class BackofficeHandler(BaseHTTPRequestHandler):
 
     def do_HEAD(self):
         parsed = urlparse(self.path)
+        if parsed.path != '/api/owner/site-access' and load_site_access().get('enabled') is False:
+            self.write_site_disabled_response(include_body=False)
+            return
         if parsed.path.startswith('/api/') and not self.is_authorized():
             self.send_unauthorized(include_body=False)
             return
@@ -90,11 +122,19 @@ class BackofficeHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_POST(self):
+        parsed = urlparse(self.path)
+        if parsed.path == '/api/owner/site-access':
+            self.handle_owner_site_access()
+            return
+
+        if load_site_access().get('enabled') is False:
+            self.write_site_disabled_response()
+            return
+
         if not self.is_authorized():
             self.send_unauthorized()
             return
 
-        parsed = urlparse(self.path)
         if parsed.path == '/api/admin/products':
             self.handle_admin_product_create()
         elif parsed.path == '/api/business-bio':
@@ -107,6 +147,10 @@ class BackofficeHandler(BaseHTTPRequestHandler):
             self.send_not_found()
 
     def do_PUT(self):
+        if load_site_access().get('enabled') is False:
+            self.write_site_disabled_response()
+            return
+
         if not self.is_authorized():
             self.send_unauthorized()
             return
@@ -151,6 +195,9 @@ class BackofficeHandler(BaseHTTPRequestHandler):
             return
         if parsed.path == '/api/business-bank-info':
             self.send_json(load_business_bank_info(), include_body=include_body)
+            return
+        if parsed.path == '/api/site-access':
+            self.send_json(load_site_access(), include_body=include_body)
             return
         if parsed.path == '/api/backoffice/credentials':
             credentials = load_backoffice_credentials()
@@ -243,6 +290,28 @@ class BackofficeHandler(BaseHTTPRequestHandler):
             'password': password,
         })
         self.send_json({'success': True, 'username': username})
+
+    def handle_owner_site_access(self):
+        if not self.is_owner_authorized():
+            self.send_json({'error': 'Owner authorization required.'}, status=401)
+            return
+
+        length = int(self.headers.get('Content-Length', 0))
+        body = self.rfile.read(length).decode('utf-8') if length else '{}'
+        try:
+            data = json.loads(body)
+        except json.JSONDecodeError:
+            self.send_json({'error': 'Invalid JSON payload.'}, status=400)
+            return
+
+        enabled = data.get('enabled')
+        reason = str(data.get('reason', '')).strip()
+        if not isinstance(enabled, bool):
+            self.send_json({'error': 'enabled must be true or false.'}, status=400)
+            return
+
+        updated = save_site_access(enabled, reason)
+        self.send_json({'success': True, 'siteAccess': updated})
 
     def send_cors_headers(self):
         self.send_header('Access-Control-Allow-Origin', '*')

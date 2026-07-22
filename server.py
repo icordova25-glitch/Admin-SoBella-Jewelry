@@ -21,6 +21,7 @@ PRODUCTS_PATH = DATA_DIR / 'products.json'
 ORDERS_PATH = DATA_DIR / 'orders.json'
 BIO_PATH = DATA_DIR / 'business-bio.json'
 BANK_INFO_PATH = DATA_DIR / 'bank-info.json'
+SITE_ACCESS_PATH = DATA_DIR / 'site-access.json'
 
 
 def resolve_path(path_value):
@@ -113,6 +114,41 @@ def ensure_data_files():
             'routingNumber': '',
         })
 
+    site_access_path = resolve_path(SITE_ACCESS_PATH)
+    if not site_access_path.exists():
+        write_json(site_access_path, {
+            'enabled': True,
+            'reason': '',
+            'updatedAt': None,
+        })
+
+
+def load_site_access():
+    ensure_data_files()
+    try:
+        data = read_json(resolve_path(SITE_ACCESS_PATH))
+    except Exception:
+        data = {}
+    return {
+        'enabled': data.get('enabled', True) is not False,
+        'reason': str(data.get('reason', '')),
+        'updatedAt': data.get('updatedAt'),
+    }
+
+
+def save_site_access(enabled, reason=''):
+    payload = {
+        'enabled': bool(enabled),
+        'reason': str(reason or ''),
+        'updatedAt': datetime.now(timezone.utc).isoformat(),
+    }
+    write_json(resolve_path(SITE_ACCESS_PATH), payload)
+    return payload
+
+
+def get_site_base_url():
+    return str(os.getenv('SITE_URL', 'http://localhost:3000')).rstrip('/')
+
 
 def save_uploaded_image(uploaded_file):
     if not uploaded_file:
@@ -155,11 +191,8 @@ def load_products():
 
 
 def build_sitemap_xml():
-    base_url = 'https://localhost:3000'
-    paths = ['/', '/review']
-    products = load_products()
-    for product in products:
-        paths.append(f"/product/{product['sku']}")
+    base_url = get_site_base_url()
+    paths = ['/']
     lines = ['<?xml version="1.0" encoding="UTF-8"?>', '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
     for path in paths:
         lines.append('  <url>')
@@ -170,11 +203,12 @@ def build_sitemap_xml():
 
 
 def build_product_schema_markup(products):
+    base_url = get_site_base_url()
     schema_items = []
     for product in products:
         image_url = product.get('image', '')
         if image_url and not image_url.startswith('http'):
-            image_url = f'https://localhost:3000{image_url}'
+            image_url = f'{base_url}{image_url}'
         schema_items.append({
             '@context': 'https://schema.org',
             '@type': 'Product',
@@ -456,8 +490,49 @@ class JewelryHandler(BaseHTTPRequestHandler):
         self.send_cors_headers()
         self.end_headers()
 
+    def is_owner_authorized(self):
+        secret = str(os.getenv('SITE_ACCESS_TOGGLE_KEY', '')).strip() or str(os.getenv('OWNER_ACCESS_KEY', '')).strip()
+        if not secret:
+            return False
+        return self.headers.get('X-Site-Access-Key', '').strip() == secret
+
+    def write_site_disabled_response(self, include_body=True):
+        access = load_site_access()
+        if self.path.startswith('/api/'):
+            self.send_json({
+                'error': 'Site access is currently disabled.',
+                'reason': access.get('reason', ''),
+                'code': 'SITE_DISABLED',
+            }, status=402, include_body=include_body)
+            return
+
+        message = access.get('reason') or 'Service is temporarily unavailable due to billing status.'
+        html = (
+            '<!doctype html><html lang="en"><head><meta charset="utf-8" />'
+            '<meta name="viewport" content="width=device-width, initial-scale=1" />'
+            '<title>Service Unavailable</title></head><body>'
+            '<main style="max-width:560px;margin:4rem auto;padding:1.2rem;border:1px solid #ddd;border-radius:12px;font-family:Arial,sans-serif;">'
+            '<h1>Temporarily unavailable</h1>'
+            f'<p>{message}</p>'
+            '<p>Please contact the site owner to restore access.</p>'
+            '</main></body></html>'
+        )
+        body = html.encode('utf-8')
+        self.send_response(402)
+        self.send_header('Content-Type', 'text/html; charset=utf-8')
+        self.send_header('Content-Length', str(len(body)))
+        self.end_headers()
+        if include_body:
+            self.wfile.write(body)
+
     def dispatch_request(self, include_body=True):
         parsed = urlparse(self.path)
+        site_access = load_site_access()
+        always_allowed = {'/api/site-access', '/api/owner/site-access', '/sitemap.xml', '/robots.txt'}
+        if parsed.path not in always_allowed and site_access.get('enabled') is False:
+            self.write_site_disabled_response(include_body=include_body)
+            return
+
         if parsed.path == '/api/products':
             self.send_json(load_products(), include_body=include_body)
         elif parsed.path == '/api/orders':
@@ -471,13 +546,26 @@ class JewelryHandler(BaseHTTPRequestHandler):
             self.send_json(load_business_bank_info(), include_body=include_body)
         elif parsed.path == '/sitemap.xml':
             self.send_xml(build_sitemap_xml(), include_body=include_body)
+        elif parsed.path == '/robots.txt':
+            self.send_text(f"User-agent: *\nAllow: /\nDisallow: /backoffice\nSitemap: {get_site_base_url()}/sitemap.xml\n", include_body=include_body)
         elif parsed.path == '/api/schema/products':
             self.send_json(build_product_schema_markup(load_products()), include_body=include_body)
+        elif parsed.path == '/api/site-access':
+            self.send_json(load_site_access(), include_body=include_body)
         else:
             self.serve_static(parsed.path, include_body=include_body)
 
     def do_POST(self):
         parsed = urlparse(self.path)
+        if parsed.path == '/api/owner/site-access':
+            self.handle_owner_site_access()
+            return
+
+        site_access = load_site_access()
+        if site_access.get('enabled') is False:
+            self.write_site_disabled_response(include_body=True)
+            return
+
         if parsed.path == '/api/orders':
             self.handle_order_creation()
         elif parsed.path == '/api/checkout/create-session':
@@ -496,11 +584,38 @@ class JewelryHandler(BaseHTTPRequestHandler):
 
     def do_PUT(self):
         parsed = urlparse(self.path)
+        site_access = load_site_access()
+        if site_access.get('enabled') is False:
+            self.write_site_disabled_response(include_body=True)
+            return
+
         if parsed.path.startswith('/api/admin/products/'):
             self.handle_admin_product_update(parsed.path)
         else:
             self.send_response(404)
             self.end_headers()
+
+    def handle_owner_site_access(self):
+        if not self.is_owner_authorized():
+            self.send_json({'error': 'Owner authorization required.'}, status=401)
+            return
+
+        length = int(self.headers.get('Content-Length', 0))
+        body = self.rfile.read(length).decode('utf-8') if length else '{}'
+        try:
+            data = json.loads(body)
+        except json.JSONDecodeError:
+            self.send_json({'error': 'Invalid JSON payload.'}, status=400)
+            return
+
+        enabled = data.get('enabled')
+        reason = str(data.get('reason', '')).strip()
+        if not isinstance(enabled, bool):
+            self.send_json({'error': 'enabled must be true or false.'}, status=400)
+            return
+
+        updated = save_site_access(enabled, reason)
+        self.send_json({'success': True, 'siteAccess': updated})
 
     def handle_order_creation(self):
         length = int(self.headers.get('Content-Length', 0))
@@ -713,6 +828,16 @@ class JewelryHandler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_cors_headers()
         self.send_header('Content-Type', 'application/xml; charset=utf-8')
+        self.send_header('Content-Length', str(len(body)))
+        self.end_headers()
+        if include_body:
+            self.wfile.write(body)
+
+    def send_text(self, payload, status=200, include_body=True):
+        body = payload.encode('utf-8')
+        self.send_response(status)
+        self.send_cors_headers()
+        self.send_header('Content-Type', 'text/plain; charset=utf-8')
         self.send_header('Content-Length', str(len(body)))
         self.end_headers()
         if include_body:

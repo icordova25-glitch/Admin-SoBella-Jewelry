@@ -1,19 +1,33 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
+let kv = null;
+
+try {
+  // Optional dependency in local dev; enabled automatically in Vercel when env vars exist.
+  // eslint-disable-next-line global-require
+  kv = require('@vercel/kv').kv;
+} catch (error) {
+  kv = null;
+}
 
 const app = express();
 const port = process.env.PORT || 3000;
-const isVercel = Boolean(process.env.VERCEL);
-const sourceDataDir = path.join(__dirname, 'data');
-const dataDir = isVercel ? path.join('/tmp', 'sobella-data') : sourceDataDir;
+const dataDir = path.join(__dirname, 'data');
 const productsPath = path.join(dataDir, 'products.json');
 const ordersPath = path.join(dataDir, 'orders.json');
-const bioPath = path.join(dataDir, 'business-bio.json');
+const backofficeDir = path.join(__dirname, 'backoffice');
+const businessBioPath = path.join(dataDir, 'business-bio.json');
 const bankInfoPath = path.join(dataDir, 'bank-info.json');
-const uploadsDir = isVercel ? path.join('/tmp', 'sobella-uploads') : path.join(__dirname, 'uploads');
-const backofficeUser = process.env.BACKOFFICE_USERNAME || 'admin';
-const backofficePass = process.env.BACKOFFICE_PASSWORD || 'sobella-admin';
+const siteAccessPath = path.join(dataDir, 'site-access.json');
+
+const STORAGE_KEYS = {
+  products: 'sobella:products',
+  orders: 'sobella:orders',
+  businessBio: 'sobella:businessBio',
+  bankInfo: 'sobella:bankInfo',
+  siteAccess: 'sobella:siteAccess',
+};
 
 const defaultProducts = [
   {
@@ -50,251 +64,229 @@ const defaultProducts = [
   },
 ];
 
-const memoryStore = {
-  products: JSON.parse(JSON.stringify(defaultProducts)),
-  orders: [],
-  bio: {
-    bio: 'SoBella Jewelry creates timeless, elegant pieces that celebrate modern love, personal style, and everyday luxury.',
-  },
-  bankInfo: {
-    accountHolder: '',
-    bankName: '',
-    accountNumber: '',
-    routingNumber: '',
-  },
+const defaultOrders = [];
+const defaultBusinessBio = {
+  bio: 'SoBella Jewelry creates timeless, elegant pieces that celebrate modern love, personal style, and everyday luxury.',
+};
+const defaultBankInfo = {
+  accountHolder: '',
+  bankName: '',
+  accountNumber: '',
+  routingNumber: '',
+};
+const defaultSiteAccess = {
+  enabled: true,
+  reason: '',
+  updatedAt: null,
 };
 
-function fallbackStoreForPath(filePath) {
-  if (filePath === productsPath) {
-    return 'products';
-  }
-  if (filePath === ordersPath) {
-    return 'orders';
-  }
-  if (filePath === bioPath) {
-    return 'bio';
-  }
-  if (filePath === bankInfoPath) {
-    return 'bankInfo';
-  }
-  return null;
-}
-
-function getMemoryFallback(filePath, fallback) {
-  const key = fallbackStoreForPath(filePath);
-  if (!key) {
-    return fallback;
-  }
-  return JSON.parse(JSON.stringify(memoryStore[key]));
-}
-
-function setMemoryFallback(filePath, data) {
-  const key = fallbackStoreForPath(filePath);
-  if (key) {
-    memoryStore[key] = JSON.parse(JSON.stringify(data));
-  }
-}
-
+app.set('trust proxy', true);
 app.use(express.json());
 
-function seedRuntimeFile(fileName, fallback) {
-  const runtimePath = path.join(dataDir, fileName);
-  try {
-    if (fs.existsSync(runtimePath)) {
-      return;
-    }
-
-    const sourcePath = path.join(sourceDataDir, fileName);
-    if (fs.existsSync(sourcePath)) {
-      fs.copyFileSync(sourcePath, runtimePath);
-      return;
-    }
-
-    writeJson(runtimePath, fallback);
-  } catch (error) {
-    writeJson(runtimePath, fallback);
-  }
-}
-
-function ensureDataFiles() {
-  try {
-    fs.mkdirSync(dataDir, { recursive: true });
-    fs.mkdirSync(uploadsDir, { recursive: true });
-  } catch (error) {
-    return;
-  }
-
-  seedRuntimeFile('products.json', defaultProducts);
-  seedRuntimeFile('orders.json', []);
-  seedRuntimeFile('business-bio.json', {
-    bio: 'SoBella Jewelry creates timeless, elegant pieces that celebrate modern love, personal style, and everyday luxury.',
-  });
-  seedRuntimeFile('bank-info.json', {
-    accountHolder: '',
-    bankName: '',
-    accountNumber: '',
-    routingNumber: '',
-  });
-}
-
 function readJson(filePath, fallback) {
+  if (!fs.existsSync(filePath)) {
+    return fallback;
+  }
+
   try {
-    if (!fs.existsSync(filePath)) {
-      return getMemoryFallback(filePath, fallback);
-    }
     return JSON.parse(fs.readFileSync(filePath, 'utf8'));
   } catch (error) {
-    return getMemoryFallback(filePath, fallback);
+    return fallback;
   }
 }
 
 function writeJson(filePath, data) {
-  setMemoryFallback(filePath, data);
-  try {
-    fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
-  } catch (error) {
+  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+}
+
+function hasKvConfigured() {
+  return Boolean(kv && process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
+}
+
+async function readStore(key, filePath, fallback) {
+  if (hasKvConfigured()) {
+    const value = await kv.get(key);
+    if (value !== null && value !== undefined) {
+      return value;
+    }
+    await kv.set(key, fallback);
+    return fallback;
+  }
+
+  return readJson(filePath, fallback);
+}
+
+async function writeStore(key, filePath, data) {
+  if (hasKvConfigured()) {
+    await kv.set(key, data);
     return;
   }
+
+  writeJson(filePath, data);
 }
 
-function getAuthCredentials(req) {
-  const authHeader = req.headers.authorization || '';
-  if (!authHeader.startsWith('Basic ')) {
-    return null;
-  }
+function normalizeSiteAccess(state) {
+  return {
+    enabled: state?.enabled !== false,
+    reason: String(state?.reason || ''),
+    updatedAt: state?.updatedAt || null,
+  };
+}
 
-  try {
-    const decoded = Buffer.from(authHeader.slice(6), 'base64').toString('utf8');
-    const separatorIndex = decoded.indexOf(':');
-    if (separatorIndex === -1) {
-      return null;
-    }
+async function readSiteAccess() {
+  const state = await readStore(STORAGE_KEYS.siteAccess, siteAccessPath, defaultSiteAccess);
+  return normalizeSiteAccess(state);
+}
+
+async function writeSiteAccess({ enabled, reason = '' }) {
+  const nextState = normalizeSiteAccess({
+    enabled,
+    reason,
+    updatedAt: new Date().toISOString(),
+  });
+  await writeStore(STORAGE_KEYS.siteAccess, siteAccessPath, nextState);
+  return nextState;
+}
+
+function getBaseUrl(req) {
+  const fromEnv = String(process.env.SITE_URL || '').trim();
+  if (fromEnv) {
+    return fromEnv.replace(/\/$/, '');
+  }
+  const forwardedProto = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim();
+  const protocol = forwardedProto || req.protocol || 'https';
+  const forwardedHost = String(req.headers['x-forwarded-host'] || '').split(',')[0].trim();
+  const host = forwardedHost || req.get('host');
+  return `${protocol}://${host}`.replace(/\/$/, '');
+}
+
+function buildSitemapXml(baseUrl) {
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url>\n    <loc>${baseUrl}/</loc>\n  </url>\n</urlset>`;
+}
+
+function buildProductSchema(products, baseUrl) {
+  return products.map((product) => {
+    const image = String(product.image || '');
+    const imageUrl = image ? (image.startsWith('http') ? image : `${baseUrl}${image}`) : undefined;
     return {
-      username: decoded.slice(0, separatorIndex),
-      password: decoded.slice(separatorIndex + 1),
+      '@context': 'https://schema.org',
+      '@type': 'Product',
+      name: String(product.name || ''),
+      description: String(product.description || ''),
+      sku: String(product.sku || ''),
+      category: String(product.category || ''),
+      offers: {
+        '@type': 'Offer',
+        priceCurrency: 'USD',
+        price: String(Number(product.price || 0)),
+        availability: Number(product.stock || 0) > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+        url: `${baseUrl}/`,
+      },
+      ...(imageUrl ? { image: imageUrl } : {}),
     };
-  } catch (error) {
-    return null;
-  }
+  });
 }
 
-function requireBackofficeAuth(req, res, next) {
-  const credentials = getAuthCredentials(req);
-  if (!credentials || credentials.username !== backofficeUser || credentials.password !== backofficePass) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
-  return next();
+function renderSiteDisabledPage(reason) {
+  const message = reason || 'Service is temporarily unavailable due to billing status.';
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>Service Unavailable</title><style>body{font-family:Arial,sans-serif;background:#fff8f4;color:#2f2235;margin:0;display:grid;place-items:center;min-height:100vh;padding:1rem}main{max-width:560px;background:#fff;border:1px solid #f0e0d8;border-radius:16px;padding:1.4rem 1.2rem;box-shadow:0 10px 30px rgba(0,0,0,.05)}h1{margin:.2rem 0 0.6rem;font-size:1.4rem}p{margin:.4rem 0;line-height:1.5;color:#5e4b5f}</style></head><body><main><h1>Temporarily unavailable</h1><p>${message}</p><p>Please contact the site owner to restore access.</p></main></body></html>`;
 }
 
-function saveUploadedImage(imageFile) {
-  if (!imageFile || !imageFile.filename || !imageFile.content) {
-    return '';
+function isOwnerAuthorized(req) {
+  const secret = String(process.env.SITE_ACCESS_TOGGLE_KEY || process.env.OWNER_ACCESS_KEY || '').trim();
+  if (!secret) {
+    return false;
   }
-
-  const ext = path.extname(imageFile.filename).toLowerCase() || '.png';
-  const baseName = path.basename(imageFile.filename, ext).replace(/[^a-zA-Z0-9_-]/g, '');
-  const safeName = `${baseName || 'product'}-${Date.now()}${ext}`;
-  const targetPath = path.join(uploadsDir, safeName);
-
-  let rawContent = imageFile.content;
-  if (typeof rawContent === 'string' && rawContent.includes(',')) {
-    const parts = rawContent.split(',');
-    rawContent = parts[parts.length - 1];
-  }
-
-  try {
-    const buffer = Buffer.from(rawContent, 'base64');
-    fs.mkdirSync(path.dirname(targetPath), { recursive: true });
-    fs.writeFileSync(targetPath, buffer);
-    return `/uploads/${safeName}`;
-  } catch (error) {
-    return '';
-  }
+  return String(req.headers['x-site-access-key'] || '').trim() === secret;
 }
 
-function applyProductUpdate(products, sku, updates) {
-  const product = products.find((item) => item.sku === sku);
-  if (!product) {
-    return null;
+app.use(async (req, res, next) => {
+  const alwaysAllowed = new Set(['/api/site-access', '/api/owner/site-access', '/api/health/storage', '/robots.txt', '/sitemap.xml']);
+  if (alwaysAllowed.has(req.path)) {
+    return next();
   }
 
-  const operation = updates.operation;
-  if (operation === 'restock') {
-    product.stock = Number(product.stock || 0) + 1;
-    return { success: true, product };
-  }
-  if (operation === 'decrease') {
-    product.stock = Math.max(0, Number(product.stock || 0) - 1);
-    return { success: true, product };
-  }
-  if (operation === 'delete') {
-    const index = products.findIndex((item) => item.sku === sku);
-    products.splice(index, 1);
-    return { success: true, deleted: true, sku };
+  const access = await readSiteAccess();
+  if (access.enabled) {
+    return next();
   }
 
-  for (const field of ['name', 'description', 'category']) {
-    if (updates[field] !== undefined) {
-      product[field] = updates[field];
-    }
-  }
-  if (updates.price !== undefined) {
-    product.price = Number(updates.price);
-  }
-  if (updates.stock !== undefined) {
-    product.stock = Number(updates.stock);
+  if (req.path.startsWith('/api/')) {
+    return res.status(402).json({
+      error: 'Site access is currently disabled.',
+      reason: access.reason,
+      code: 'SITE_DISABLED',
+    });
   }
 
-  return { success: true, product };
-}
+  return res.status(402).type('html').send(renderSiteDisabledPage(access.reason));
+});
 
-app.use('/uploads', express.static(uploadsDir));
-app.use('/backoffice', express.static(path.join(__dirname, 'backoffice')));
-app.use('/public', express.static(path.join(__dirname, 'public')));
+app.get('/robots.txt', (req, res) => {
+  const baseUrl = getBaseUrl(req);
+  res.type('text/plain').send(`User-agent: *\nAllow: /\nDisallow: /backoffice\nSitemap: ${baseUrl}/sitemap.xml\n`);
+});
+
+app.get('/sitemap.xml', (req, res) => {
+  const baseUrl = getBaseUrl(req);
+  res.type('application/xml').send(buildSitemapXml(baseUrl));
+});
+
+app.get('/api/schema/products', async (req, res) => {
+  const products = await readStore(STORAGE_KEYS.products, productsPath, defaultProducts);
+  res.json(buildProductSchema(products, getBaseUrl(req)));
+});
+
+app.get('/api/site-access', async (req, res) => {
+  const access = await readSiteAccess();
+  res.json(access);
+});
+
+app.post('/api/owner/site-access', async (req, res) => {
+  if (!isOwnerAuthorized(req)) {
+    return res.status(401).json({ error: 'Owner authorization required.' });
+  }
+
+  const enabled = req.body?.enabled;
+  const reason = String(req.body?.reason || '').trim();
+  if (typeof enabled !== 'boolean') {
+    return res.status(400).json({ error: 'enabled must be true or false.' });
+  }
+
+  const updated = await writeSiteAccess({ enabled, reason });
+  return res.json({ success: true, siteAccess: updated });
+});
+
+app.use('/backoffice', (req, res, next) => {
+  res.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
+  next();
+});
+app.use('/backoffice', express.static(backofficeDir));
 app.use(express.static(path.join(__dirname, 'public')));
 
-ensureDataFiles();
-
-app.get('/api/products', (req, res) => {
-  res.json(readJson(productsPath, []));
+app.get('/api/products', async (req, res) => {
+  const products = await readStore(STORAGE_KEYS.products, productsPath, defaultProducts);
+  res.json(products);
 });
 
-app.get('/api/address-autocomplete', async (req, res) => {
-  const query = String(req.query.q || '').trim();
-  if (query.length < 3) {
-    return res.json({ suggestions: [] });
-  }
-
-  const endpoint = `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=0&countrycodes=us&limit=6&q=${encodeURIComponent(query)}`;
-  try {
-    const response = await fetch(endpoint, {
-      headers: {
-        Accept: 'application/json',
-        'User-Agent': 'SoBella-Jewelry-Checkout/1.0',
-      },
-    });
-    if (!response.ok) {
-      return res.status(502).json({ suggestions: [] });
-    }
-    const payload = await response.json();
-    const suggestions = Array.isArray(payload)
-      ? payload.map((item) => item.display_name).filter(Boolean)
-      : [];
-    return res.json({ suggestions });
-  } catch (error) {
-    return res.status(500).json({ suggestions: [] });
-  }
+app.get('/api/health/storage', (req, res) => {
+  const usingKv = hasKvConfigured();
+  res.json({
+    ok: true,
+    storage: usingKv ? 'kv' : 'file',
+    runtime: process.env.VERCEL ? 'vercel' : 'local',
+    timestamp: new Date().toISOString(),
+  });
 });
 
-app.post('/api/orders', (req, res) => {
+app.post('/api/orders', async (req, res) => {
   const { customerName, email, items, paymentMethod } = req.body;
 
   if (!customerName || !email || !Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ error: 'Please complete the checkout form.' });
   }
 
-  const products = readJson(productsPath, []);
+  const products = await readStore(STORAGE_KEYS.products, productsPath, defaultProducts);
   const inventoryBySku = new Map(products.map((product) => [product.sku, product]));
   const orderedItems = [];
 
@@ -323,7 +315,7 @@ app.post('/api/orders', (req, res) => {
   const shipping = subtotal > 0 ? 12 : 0;
   const total = subtotal + shipping;
 
-  const orders = readJson(ordersPath, []);
+  const orders = await readStore(STORAGE_KEYS.orders, ordersPath, defaultOrders);
   const newOrder = {
     id: `ORD-${Date.now()}`,
     customerName,
@@ -336,105 +328,155 @@ app.post('/api/orders', (req, res) => {
   };
 
   orders.unshift(newOrder);
-  writeJson(productsPath, products);
-  writeJson(ordersPath, orders);
+  await writeStore(STORAGE_KEYS.products, productsPath, products);
+  await writeStore(STORAGE_KEYS.orders, ordersPath, orders);
 
   res.json({ success: true, order: newOrder });
 });
 
-app.get('/api/orders', (req, res) => {
-  res.json(readJson(ordersPath, []));
+app.get('/api/orders', async (req, res) => {
+  const orders = await readStore(STORAGE_KEYS.orders, ordersPath, defaultOrders);
+  res.json(orders);
 });
 
-app.get('/api/admin/products', requireBackofficeAuth, (req, res) => {
-  res.json(readJson(productsPath, []));
+app.get('/api/business-bio', async (req, res) => {
+  const bio = await readStore(STORAGE_KEYS.businessBio, businessBioPath, defaultBusinessBio);
+  res.json(bio);
 });
 
-app.post('/api/admin/products', requireBackofficeAuth, (req, res) => {
-  const data = req.body || {};
-  const products = readJson(productsPath, []);
-  const product = {
-    sku: data.sku || '',
-    category: data.category || 'necklaces',
-    name: data.name || 'Untitled',
-    description: data.description || '',
-    price: Number(data.price || 0),
-    stock: Number(data.stock || 0),
-    image: data.imageFile ? saveUploadedImage(data.imageFile) : '',
+app.post('/api/business-bio', async (req, res) => {
+  const payload = {
+    bio: String(req.body?.bio || '').slice(0, 500),
   };
+  await writeStore(STORAGE_KEYS.businessBio, businessBioPath, payload);
+  res.json(payload);
+});
+
+app.get('/api/business-bank-info', async (req, res) => {
+  const bankInfo = await readStore(STORAGE_KEYS.bankInfo, bankInfoPath, defaultBankInfo);
+  res.json(bankInfo);
+});
+
+app.post('/api/business-bank-info', async (req, res) => {
+  const payload = {
+    accountHolder: String(req.body?.accountHolder || '').trim(),
+    bankName: String(req.body?.bankName || '').trim(),
+    accountNumber: String(req.body?.accountNumber || '').trim(),
+    routingNumber: String(req.body?.routingNumber || '').trim(),
+  };
+  await writeStore(STORAGE_KEYS.bankInfo, bankInfoPath, payload);
+  res.json(payload);
+});
+
+app.post('/api/admin/products', async (req, res) => {
+  const products = await readStore(STORAGE_KEYS.products, productsPath, defaultProducts);
+  const payload = req.body || {};
+
+  if (!payload.sku || !payload.name || !payload.category) {
+    return res.status(400).json({ error: 'SKU, name, and category are required.' });
+  }
+
+  const existing = products.find((item) => item.sku === payload.sku);
+  if (existing) {
+    return res.status(400).json({ error: `Product ${payload.sku} already exists.` });
+  }
+
+  const product = {
+    sku: String(payload.sku).trim(),
+    category: String(payload.category).trim(),
+    name: String(payload.name).trim(),
+    description: String(payload.description || '').trim(),
+    price: Number(payload.price || 0),
+    stock: Number(payload.stock || 0),
+    image: String(payload.image || ''),
+  };
+
   products.push(product);
-  writeJson(productsPath, products);
+  await writeStore(STORAGE_KEYS.products, productsPath, products);
   res.json({ success: true, product });
 });
 
-app.put('/api/admin/products/:sku', requireBackofficeAuth, (req, res) => {
-  const products = readJson(productsPath, []);
-  const result = applyProductUpdate(products, req.params.sku, req.body || {});
-  if (!result) {
-    return res.status(404).json({ error: `Product ${req.params.sku} not found` });
+app.put('/api/admin/products/:sku', async (req, res) => {
+  const { sku } = req.params;
+  const updates = req.body || {};
+  const products = await readStore(STORAGE_KEYS.products, productsPath, defaultProducts);
+  const index = products.findIndex((item) => item.sku === sku);
+
+  if (index === -1) {
+    return res.status(404).json({ error: `Product ${sku} was not found.` });
   }
-  writeJson(productsPath, products);
-  return res.json(result);
-});
 
-app.get('/api/business-bio', (req, res) => {
-  res.json(readJson(bioPath, { bio: '' }));
-});
+  const product = products[index];
+  const operation = updates.operation;
 
-app.post('/api/business-bio', requireBackofficeAuth, (req, res) => {
-  const payload = { bio: String((req.body && req.body.bio) || '').slice(0, 500) };
-  writeJson(bioPath, payload);
-  res.json(payload);
-});
+  if (operation === 'restock') {
+    product.stock = Number(product.stock || 0) + 1;
+  } else if (operation === 'decrease') {
+    product.stock = Math.max(0, Number(product.stock || 0) - 1);
+  } else if (operation === 'delete') {
+    products.splice(index, 1);
+    await writeStore(STORAGE_KEYS.products, productsPath, products);
+    return res.json({ deleted: true, sku });
+  } else {
+    if (updates.name !== undefined) {
+      product.name = String(updates.name).trim();
+    }
+    if (updates.category !== undefined) {
+      product.category = String(updates.category).trim();
+    }
+    if (updates.description !== undefined) {
+      product.description = String(updates.description);
+    }
+    if (updates.price !== undefined) {
+      product.price = Number(updates.price);
+    }
+    if (updates.stock !== undefined) {
+      product.stock = Math.max(0, Number(updates.stock));
+    }
+    if (updates.image !== undefined) {
+      product.image = String(updates.image || '');
+    }
+  }
 
-app.get('/api/business-bank-info', requireBackofficeAuth, (req, res) => {
-  res.json(
-    readJson(bankInfoPath, {
-      accountHolder: '',
-      bankName: '',
-      accountNumber: '',
-      routingNumber: '',
-    }),
-  );
-});
-
-app.post('/api/business-bank-info', requireBackofficeAuth, (req, res) => {
-  const payload = {
-    accountHolder: String((req.body && req.body.accountHolder) || '').trim(),
-    bankName: String((req.body && req.body.bankName) || '').trim(),
-    accountNumber: String((req.body && req.body.accountNumber) || '').trim(),
-    routingNumber: String((req.body && req.body.routingNumber) || '').trim(),
-  };
-  writeJson(bankInfoPath, payload);
-  res.json(payload);
-});
-
-app.get('/admin', (req, res) => {
-  res.redirect('/backoffice/admin.html');
-});
-
-app.get('/orders', (req, res) => {
-  res.redirect('/backoffice/orders.html');
+  products[index] = product;
+  await writeStore(STORAGE_KEYS.products, productsPath, products);
+  res.json({ success: true, product });
 });
 
 app.get('/backoffice', (req, res) => {
-  res.redirect('/backoffice/admin.html');
+  res.sendFile(path.join(backofficeDir, 'admin.html'));
 });
 
-app.get('/', (req, res) => {
-  const host = String(req.headers.host || '').toLowerCase();
-  if (host.includes('admin-so-bella-jewelry.vercel.app')) {
-    return res.redirect('/admin');
-  }
-  return res.sendFile(path.join(__dirname, 'public', 'index.html'));
+app.get('/backoffice/admin', (req, res) => {
+  res.redirect(302, '/backoffice/admin.html');
 });
 
-app.get('/shop', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+app.get('/backoffice/orders', (req, res) => {
+  res.redirect(302, '/backoffice/orders.html');
+});
+
+app.get('/admin', (req, res) => {
+  res.redirect(302, '/backoffice/admin.html');
+});
+
+app.get('/admin.html', (req, res) => {
+  res.redirect(302, '/backoffice/admin.html');
+});
+
+app.get('/orders', (req, res) => {
+  res.redirect(302, '/backoffice/orders.html');
+});
+
+app.get('/orders.html', (req, res) => {
+  res.redirect(302, '/backoffice/orders.html');
 });
 
 app.get('/review', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'review.html'));
+});
+
+app.get('/backoffice/*', (req, res) => {
+  res.redirect(302, '/backoffice/admin.html');
 });
 
 app.get('*', (req, res) => {
