@@ -11,6 +11,9 @@ const loginStatus = document.getElementById('loginStatus');
 const logoutButton = document.getElementById('logoutButton');
 const loginSubmitButton = document.getElementById('loginSubmitButton');
 const adminLoginHeading = document.getElementById('adminLoginHeading');
+const credentialsForm = document.getElementById('credentialsForm');
+const newAdminUsername = document.getElementById('newAdminUsername');
+const newAdminPassword = document.getElementById('newAdminPassword');
 const productRefreshChannel = window.BroadcastChannel ? new BroadcastChannel('sobella-products') : null;
 const apiBase = window.location.protocol === 'file:' ? 'http://localhost:3001' : window.location.origin;
 const backofficeAuth = window.sobellaBackofficeAuth;
@@ -26,6 +29,25 @@ function setLoginStatus(message, isError = false) {
   }
   loginStatus.textContent = message;
   loginStatus.style.color = isError ? '#c0392b' : '';
+}
+
+function isStrongPassword(password) {
+  if (typeof password !== 'string') {
+    return false;
+  }
+  if (password.length < 8) {
+    return false;
+  }
+  if (!/[a-z]/.test(password)) {
+    return false;
+  }
+  if (!/[A-Z]/.test(password)) {
+    return false;
+  }
+  if (!/[0-9]/.test(password)) {
+    return false;
+  }
+  return /[^A-Za-z0-9]/.test(password);
 }
 
 function updateLoginForm() {
@@ -58,6 +80,9 @@ function updateLoginForm() {
   }
   if (loginSubmitButton) {
     loginSubmitButton.style.display = hideLoginFields ? 'none' : '';
+  }
+  if (newAdminUsername && credentials?.username) {
+    newAdminUsername.value = credentials.username;
   }
 }
 
@@ -318,6 +343,41 @@ if (logoutButton) {
     }
     updateLoginForm();
     adminProducts.innerHTML = '<p>Sign in to view products.</p>';
+  });
+}
+
+if (credentialsForm) {
+  credentialsForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const username = newAdminUsername?.value.trim();
+    const password = newAdminPassword?.value || '';
+
+    if (!username) {
+      setLoginStatus('Enter a new username.', true);
+      return;
+    }
+
+    if (!isStrongPassword(password)) {
+      setLoginStatus('Password must be 8+ chars with uppercase, lowercase, number, and special character.', true);
+      return;
+    }
+
+    try {
+      await backofficeRequest('/api/backoffice/credentials', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
+      backofficeAuth.setCredentials(username, password);
+      hasAuthenticatedSession = true;
+      if (newAdminPassword) {
+        newAdminPassword.value = '';
+      }
+      updateLoginForm();
+      setLoginStatus('Backoffice credentials updated.');
+    } catch (error) {
+      setLoginStatus(error.message || 'Unable to update credentials.', true);
+    }
   });
 }
 

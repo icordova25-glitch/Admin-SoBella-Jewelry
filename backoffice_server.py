@@ -25,6 +25,48 @@ from server import (
 BACKOFFICE_PORT = int(os.getenv('BACKOFFICE_PORT', '3001'))
 BACKOFFICE_USERNAME = os.getenv('BACKOFFICE_USERNAME', 'admin')
 BACKOFFICE_PASSWORD = os.getenv('BACKOFFICE_PASSWORD', 'sobella-admin')
+BACKOFFICE_AUTH_PATH = ROOT / 'data' / 'backoffice-auth.json'
+
+
+def ensure_backoffice_auth_file():
+    ensure_data_files()
+    if not BACKOFFICE_AUTH_PATH.exists():
+        write_json(BACKOFFICE_AUTH_PATH, {
+            'username': BACKOFFICE_USERNAME,
+            'password': BACKOFFICE_PASSWORD,
+        })
+
+
+def load_backoffice_credentials():
+    ensure_backoffice_auth_file()
+    try:
+        data = read_json(BACKOFFICE_AUTH_PATH)
+    except Exception:
+        data = {}
+
+    username = str(data.get('username', '')).strip()
+    password = str(data.get('password', ''))
+    if not username or not password:
+        username = BACKOFFICE_USERNAME
+        password = BACKOFFICE_PASSWORD
+        write_json(BACKOFFICE_AUTH_PATH, {
+            'username': username,
+            'password': password,
+        })
+    return {
+        'username': username,
+        'password': password,
+    }
+
+
+def validate_password_strength(password):
+    if len(password) < 8:
+        return False
+    has_upper = any(char.isupper() for char in password)
+    has_lower = any(char.islower() for char in password)
+    has_digit = any(char.isdigit() for char in password)
+    has_special = any(not char.isalnum() for char in password)
+    return has_upper and has_lower and has_digit and has_special
 
 
 class BackofficeHandler(BaseHTTPRequestHandler):
@@ -59,6 +101,8 @@ class BackofficeHandler(BaseHTTPRequestHandler):
             self.handle_business_bio_save()
         elif parsed.path == '/api/business-bank-info':
             self.handle_business_bank_info_save()
+        elif parsed.path == '/api/backoffice/credentials':
+            self.handle_backoffice_credentials_save()
         else:
             self.send_not_found()
 
@@ -85,7 +129,10 @@ class BackofficeHandler(BaseHTTPRequestHandler):
             return False
 
         username, separator, password = decoded.partition(':')
-        return separator == ':' and username == BACKOFFICE_USERNAME and password == BACKOFFICE_PASSWORD
+        if separator != ':':
+            return False
+        credentials = load_backoffice_credentials()
+        return username == credentials['username'] and password == credentials['password']
 
     def dispatch_request(self, include_body=True):
         parsed = urlparse(self.path)
@@ -104,6 +151,10 @@ class BackofficeHandler(BaseHTTPRequestHandler):
             return
         if parsed.path == '/api/business-bank-info':
             self.send_json(load_business_bank_info(), include_body=include_body)
+            return
+        if parsed.path == '/api/backoffice/credentials':
+            credentials = load_backoffice_credentials()
+            self.send_json({'username': credentials['username']}, include_body=include_body)
             return
         if parsed.path.startswith('/public/'):
             asset_path = ROOT / parsed.path.lstrip('/')
@@ -166,6 +217,32 @@ class BackofficeHandler(BaseHTTPRequestHandler):
         body = self.rfile.read(length).decode('utf-8')
         data = json.loads(body)
         self.send_json(save_business_bank_info(data))
+
+    def handle_backoffice_credentials_save(self):
+        length = int(self.headers.get('Content-Length', 0))
+        body = self.rfile.read(length).decode('utf-8') if length else '{}'
+        try:
+            data = json.loads(body)
+        except json.JSONDecodeError:
+            self.send_json({'error': 'Invalid JSON payload.'}, status=400)
+            return
+
+        username = str(data.get('username', '')).strip()
+        password = str(data.get('password', ''))
+
+        if not username:
+            self.send_json({'error': 'Username is required.'}, status=400)
+            return
+
+        if not validate_password_strength(password):
+            self.send_json({'error': 'Password must be at least 8 characters and include uppercase, lowercase, number, and special character.'}, status=400)
+            return
+
+        write_json(BACKOFFICE_AUTH_PATH, {
+            'username': username,
+            'password': password,
+        })
+        self.send_json({'success': True, 'username': username})
 
     def send_cors_headers(self):
         self.send_header('Access-Control-Allow-Origin', '*')
@@ -241,9 +318,11 @@ class BackofficeHandler(BaseHTTPRequestHandler):
 
 def main():
     ensure_data_files()
+    ensure_backoffice_auth_file()
+    credentials = load_backoffice_credentials()
     server = ThreadingHTTPServer(('0.0.0.0', BACKOFFICE_PORT), BackofficeHandler)
     print(f'Backoffice running at http://localhost:{BACKOFFICE_PORT}/backoffice/admin.html')
-    print(f'Credentials: {BACKOFFICE_USERNAME} / {BACKOFFICE_PASSWORD}')
+    print(f"Credentials: {credentials['username']} / {credentials['password']}")
     server.serve_forever()
 
 

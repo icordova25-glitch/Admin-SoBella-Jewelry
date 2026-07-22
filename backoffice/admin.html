@@ -26,6 +26,15 @@
         <p id="loginStatus" class="char-count" role="status" aria-live="polite"></p>
       </section>
       <section class="admin-section">
+        <h2>Backoffice access</h2>
+        <form id="credentialsForm" class="checkout-form">
+          <input type="text" id="newAdminUsername" placeholder="New username" autocomplete="off" required />
+          <input type="password" id="newAdminPassword" placeholder="New password" autocomplete="new-password" required />
+          <button type="submit">Update credentials</button>
+        </form>
+        <p class="char-count">Password must be at least 8 characters and include uppercase, lowercase, number, and special character.</p>
+      </section>
+      <section class="admin-section">
         <h2>Business bio</h2>
         <form id="bioForm" class="checkout-form">
           <textarea id="bioText" maxlength="500" rows="6" placeholder="Write a short bio or description for the business..."></textarea>
