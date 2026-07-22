@@ -14,6 +14,7 @@ const adminLoginHeading = document.getElementById('adminLoginHeading');
 const credentialsForm = document.getElementById('credentialsForm');
 const newAdminUsername = document.getElementById('newAdminUsername');
 const newAdminPassword = document.getElementById('newAdminPassword');
+const credentialsStatus = document.getElementById('credentialsStatus');
 const productRefreshChannel = window.BroadcastChannel ? new BroadcastChannel('sobella-products') : null;
 const apiBase = window.location.protocol === 'file:' ? 'http://localhost:3001' : window.location.origin;
 const backofficeAuth = window.sobellaBackofficeAuth;
@@ -29,6 +30,19 @@ function setLoginStatus(message, isError = false) {
   }
   loginStatus.textContent = message;
   loginStatus.style.color = isError ? '#c0392b' : '';
+}
+
+function setCredentialsStatus(message, isError = false) {
+  if (!credentialsStatus) {
+    return;
+  }
+  credentialsStatus.textContent = message || '';
+  credentialsStatus.classList.remove('success', 'error', 'show');
+  if (!message) {
+    return;
+  }
+  credentialsStatus.classList.add('show');
+  credentialsStatus.classList.add(isError ? 'error' : 'success');
 }
 
 function isStrongPassword(password) {
@@ -354,11 +368,13 @@ if (credentialsForm) {
 
     if (!username) {
       setLoginStatus('Enter a new username.', true);
+      setCredentialsStatus('Enter a new username.', true);
       return;
     }
 
     if (!isStrongPassword(password)) {
       setLoginStatus('Password must be 8+ chars with uppercase, lowercase, number, and special character.', true);
+      setCredentialsStatus('Password must be 8+ chars with uppercase, lowercase, number, and special character.', true);
       return;
     }
 
@@ -375,8 +391,10 @@ if (credentialsForm) {
       }
       updateLoginForm();
       setLoginStatus('Backoffice credentials updated.');
+      setCredentialsStatus('Credentials updated successfully.');
     } catch (error) {
       setLoginStatus(error.message || 'Unable to update credentials.', true);
+      setCredentialsStatus(error.message || 'Unable to update credentials.', true);
     }
   });
 }
