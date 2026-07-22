@@ -3,7 +3,7 @@ import json
 import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 from server import (
     ORDERS_PATH,
@@ -72,11 +72,12 @@ def validate_password_strength(password):
 
 
 class BackofficeHandler(BaseHTTPRequestHandler):
-    def is_owner_authorized(self):
+    def is_owner_authorized(self, key_override=''):
         secret = str(os.getenv('SITE_ACCESS_TOGGLE_KEY', '')).strip() or str(os.getenv('OWNER_ACCESS_KEY', '')).strip()
         if not secret:
             return False
-        return self.headers.get('X-Site-Access-Key', '').strip() == secret
+        provided = key_override or self.headers.get('X-Site-Access-Key', '').strip()
+        return provided == secret
 
     def write_site_disabled_response(self, include_body=True):
         access = load_site_access()
@@ -98,7 +99,10 @@ class BackofficeHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         parsed = urlparse(self.path)
-        if parsed.path != '/api/owner/site-access' and load_site_access().get('enabled') is False:
+        if parsed.path.startswith('/api/owner/site-access'):
+            self.handle_owner_site_access_get(parsed, include_body=True)
+            return
+        if load_site_access().get('enabled') is False:
             self.write_site_disabled_response()
             return
         if parsed.path.startswith('/api/') and not self.is_authorized():
@@ -108,7 +112,10 @@ class BackofficeHandler(BaseHTTPRequestHandler):
 
     def do_HEAD(self):
         parsed = urlparse(self.path)
-        if parsed.path != '/api/owner/site-access' and load_site_access().get('enabled') is False:
+        if parsed.path.startswith('/api/owner/site-access'):
+            self.handle_owner_site_access_get(parsed, include_body=False)
+            return
+        if load_site_access().get('enabled') is False:
             self.write_site_disabled_response(include_body=False)
             return
         if parsed.path.startswith('/api/') and not self.is_authorized():
@@ -312,6 +319,33 @@ class BackofficeHandler(BaseHTTPRequestHandler):
 
         updated = save_site_access(enabled, reason)
         self.send_json({'success': True, 'siteAccess': updated})
+
+    def handle_owner_site_access_get(self, parsed, include_body=True):
+        params = parse_qs(parsed.query or '')
+        key = str(params.get('key', [''])[0]).strip()
+        path_parts = [part for part in parsed.path.split('/') if part]
+        action = ''
+        if len(path_parts) >= 4:
+            action = path_parts[-1].lower()
+        if not action:
+            action = str(params.get('action', ['status'])[0]).strip().lower() or 'status'
+
+        if action == 'status':
+            self.send_json({'success': True, 'siteAccess': load_site_access()}, include_body=include_body)
+            return
+
+        if not self.is_owner_authorized(key_override=key):
+            self.send_json({'error': 'Owner authorization required.'}, status=401, include_body=include_body)
+            return
+
+        if action not in ('enable', 'disable'):
+            self.send_json({'error': 'Invalid action. Use enable, disable, or status.'}, status=400, include_body=include_body)
+            return
+
+        enabled = action == 'enable'
+        reason = '' if enabled else str(params.get('reason', ['Subscription inactive'])[0]).strip()
+        updated = save_site_access(enabled, reason)
+        self.send_json({'success': True, 'siteAccess': updated}, include_body=include_body)
 
     def send_cors_headers(self):
         self.send_header('Access-Control-Allow-Origin', '*')

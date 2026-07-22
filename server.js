@@ -192,17 +192,21 @@ function renderSiteDisabledPage(reason) {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>Service Unavailable</title><style>body{font-family:Arial,sans-serif;background:#fff8f4;color:#2f2235;margin:0;display:grid;place-items:center;min-height:100vh;padding:1rem}main{max-width:560px;background:#fff;border:1px solid #f0e0d8;border-radius:16px;padding:1.4rem 1.2rem;box-shadow:0 10px 30px rgba(0,0,0,.05)}h1{margin:.2rem 0 0.6rem;font-size:1.4rem}p{margin:.4rem 0;line-height:1.5;color:#5e4b5f}</style></head><body><main><h1>Temporarily unavailable</h1><p>${message}</p><p>Please contact the site owner to restore access.</p></main></body></html>`;
 }
 
+function getOwnerKey(req) {
+  return String(req.headers['x-site-access-key'] || req.query?.key || req.body?.key || '').trim();
+}
+
 function isOwnerAuthorized(req) {
   const secret = String(process.env.SITE_ACCESS_TOGGLE_KEY || process.env.OWNER_ACCESS_KEY || '').trim();
   if (!secret) {
     return false;
   }
-  return String(req.headers['x-site-access-key'] || '').trim() === secret;
+  return getOwnerKey(req) === secret;
 }
 
 app.use(async (req, res, next) => {
-  const alwaysAllowed = new Set(['/api/site-access', '/api/owner/site-access', '/api/health/storage', '/robots.txt', '/sitemap.xml']);
-  if (alwaysAllowed.has(req.path)) {
+  const alwaysAllowed = new Set(['/api/site-access', '/api/health/storage', '/robots.txt', '/sitemap.xml']);
+  if (alwaysAllowed.has(req.path) || req.path.startsWith('/api/owner/site-access')) {
     return next();
   }
 
@@ -253,6 +257,30 @@ app.post('/api/owner/site-access', async (req, res) => {
     return res.status(400).json({ error: 'enabled must be true or false.' });
   }
 
+  const updated = await writeSiteAccess({ enabled, reason });
+  return res.json({ success: true, siteAccess: updated });
+});
+
+app.get('/api/owner/site-access/:action', async (req, res) => {
+  const action = String(req.params.action || '').toLowerCase();
+
+  if (action === 'status') {
+    const access = await readSiteAccess();
+    return res.json({ success: true, siteAccess: access });
+  }
+
+  if (!isOwnerAuthorized(req)) {
+    return res.status(401).json({ error: 'Owner authorization required.' });
+  }
+
+  if (action !== 'enable' && action !== 'disable') {
+    return res.status(400).json({
+      error: 'Invalid action. Use enable, disable, or status.',
+    });
+  }
+
+  const enabled = action === 'enable';
+  const reason = enabled ? '' : String(req.query.reason || 'Subscription inactive').trim();
   const updated = await writeSiteAccess({ enabled, reason });
   return res.json({ success: true, siteAccess: updated });
 });

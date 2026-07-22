@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from email.message import EmailMessage
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 try:
     import stripe
@@ -490,11 +490,12 @@ class JewelryHandler(BaseHTTPRequestHandler):
         self.send_cors_headers()
         self.end_headers()
 
-    def is_owner_authorized(self):
+    def is_owner_authorized(self, key_override=''):
         secret = str(os.getenv('SITE_ACCESS_TOGGLE_KEY', '')).strip() or str(os.getenv('OWNER_ACCESS_KEY', '')).strip()
         if not secret:
             return False
-        return self.headers.get('X-Site-Access-Key', '').strip() == secret
+        provided = key_override or self.headers.get('X-Site-Access-Key', '').strip()
+        return provided == secret
 
     def write_site_disabled_response(self, include_body=True):
         access = load_site_access()
@@ -528,9 +529,13 @@ class JewelryHandler(BaseHTTPRequestHandler):
     def dispatch_request(self, include_body=True):
         parsed = urlparse(self.path)
         site_access = load_site_access()
-        always_allowed = {'/api/site-access', '/api/owner/site-access', '/sitemap.xml', '/robots.txt'}
-        if parsed.path not in always_allowed and site_access.get('enabled') is False:
+        always_allowed = {'/api/site-access', '/sitemap.xml', '/robots.txt'}
+        if parsed.path not in always_allowed and not parsed.path.startswith('/api/owner/site-access') and site_access.get('enabled') is False:
             self.write_site_disabled_response(include_body=include_body)
+            return
+
+        if parsed.path.startswith('/api/owner/site-access'):
+            self.handle_owner_site_access_get(parsed, include_body=include_body)
             return
 
         if parsed.path == '/api/products':
@@ -616,6 +621,33 @@ class JewelryHandler(BaseHTTPRequestHandler):
 
         updated = save_site_access(enabled, reason)
         self.send_json({'success': True, 'siteAccess': updated})
+
+    def handle_owner_site_access_get(self, parsed, include_body=True):
+        params = parse_qs(parsed.query or '')
+        key = str(params.get('key', [''])[0]).strip()
+        path_parts = [part for part in parsed.path.split('/') if part]
+        action = ''
+        if len(path_parts) >= 4:
+            action = path_parts[-1].lower()
+        if not action:
+            action = str(params.get('action', ['status'])[0]).strip().lower() or 'status'
+
+        if action == 'status':
+            self.send_json({'success': True, 'siteAccess': load_site_access()}, include_body=include_body)
+            return
+
+        if not self.is_owner_authorized(key_override=key):
+            self.send_json({'error': 'Owner authorization required.'}, status=401, include_body=include_body)
+            return
+
+        if action not in ('enable', 'disable'):
+            self.send_json({'error': 'Invalid action. Use enable, disable, or status.'}, status=400, include_body=include_body)
+            return
+
+        enabled = action == 'enable'
+        reason = '' if enabled else str(params.get('reason', ['Subscription inactive'])[0]).strip()
+        updated = save_site_access(enabled, reason)
+        self.send_json({'success': True, 'siteAccess': updated}, include_body=include_body)
 
     def handle_order_creation(self):
         length = int(self.headers.get('Content-Length', 0))
