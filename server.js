@@ -20,6 +20,8 @@ const backofficeDir = path.join(__dirname, 'backoffice');
 const businessBioPath = path.join(dataDir, 'business-bio.json');
 const bankInfoPath = path.join(dataDir, 'bank-info.json');
 const siteAccessPath = path.join(dataDir, 'site-access.json');
+const backofficeUser = String(process.env.BACKOFFICE_USERNAME || 'admin');
+const backofficePass = String(process.env.BACKOFFICE_PASSWORD || 'sobella-admin');
 
 const STORAGE_KEYS = {
   products: 'sobella:products',
@@ -204,6 +206,41 @@ function isOwnerAuthorized(req) {
   return getOwnerKey(req) === secret;
 }
 
+function parseBasicAuthHeader(authHeader) {
+  if (typeof authHeader !== 'string' || !authHeader.startsWith('Basic ')) {
+    return null;
+  }
+
+  try {
+    const decoded = Buffer.from(authHeader.slice(6), 'base64').toString('utf8');
+    const separatorIndex = decoded.indexOf(':');
+    if (separatorIndex < 1) {
+      return null;
+    }
+    return {
+      username: decoded.slice(0, separatorIndex),
+      password: decoded.slice(separatorIndex + 1),
+    };
+  } catch (error) {
+    return null;
+  }
+}
+
+function isBackofficeAuthorized(req) {
+  const credentials = parseBasicAuthHeader(req.headers.authorization || '');
+  if (!credentials) {
+    return false;
+  }
+  return credentials.username === backofficeUser && credentials.password === backofficePass;
+}
+
+function requireBackofficeAuth(req, res, next) {
+  if (!isBackofficeAuthorized(req)) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  return next();
+}
+
 app.use(async (req, res, next) => {
   const alwaysAllowed = new Set(['/api/site-access', '/api/health/storage', '/robots.txt', '/sitemap.xml']);
   if (alwaysAllowed.has(req.path) || req.path.startsWith('/api/owner/site-access')) {
@@ -367,12 +404,12 @@ app.get('/api/orders', async (req, res) => {
   res.json(orders);
 });
 
-app.get('/api/business-bio', async (req, res) => {
+app.get('/api/business-bio', requireBackofficeAuth, async (req, res) => {
   const bio = await readStore(STORAGE_KEYS.businessBio, businessBioPath, defaultBusinessBio);
   res.json(bio);
 });
 
-app.post('/api/business-bio', async (req, res) => {
+app.post('/api/business-bio', requireBackofficeAuth, async (req, res) => {
   const payload = {
     bio: String(req.body?.bio || '').slice(0, 500),
   };
@@ -380,12 +417,12 @@ app.post('/api/business-bio', async (req, res) => {
   res.json(payload);
 });
 
-app.get('/api/business-bank-info', async (req, res) => {
+app.get('/api/business-bank-info', requireBackofficeAuth, async (req, res) => {
   const bankInfo = await readStore(STORAGE_KEYS.bankInfo, bankInfoPath, defaultBankInfo);
   res.json(bankInfo);
 });
 
-app.post('/api/business-bank-info', async (req, res) => {
+app.post('/api/business-bank-info', requireBackofficeAuth, async (req, res) => {
   const payload = {
     accountHolder: String(req.body?.accountHolder || '').trim(),
     bankName: String(req.body?.bankName || '').trim(),
@@ -396,7 +433,12 @@ app.post('/api/business-bank-info', async (req, res) => {
   res.json(payload);
 });
 
-app.post('/api/admin/products', async (req, res) => {
+app.get('/api/admin/products', requireBackofficeAuth, async (req, res) => {
+  const products = await readStore(STORAGE_KEYS.products, productsPath, defaultProducts);
+  res.json(products);
+});
+
+app.post('/api/admin/products', requireBackofficeAuth, async (req, res) => {
   const products = await readStore(STORAGE_KEYS.products, productsPath, defaultProducts);
   const payload = req.body || {};
 
@@ -424,7 +466,7 @@ app.post('/api/admin/products', async (req, res) => {
   res.json({ success: true, product });
 });
 
-app.put('/api/admin/products/:sku', async (req, res) => {
+app.put('/api/admin/products/:sku', requireBackofficeAuth, async (req, res) => {
   const { sku } = req.params;
   const updates = req.body || {};
   const products = await readStore(STORAGE_KEYS.products, productsPath, defaultProducts);
