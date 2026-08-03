@@ -20,6 +20,7 @@ const backofficeDir = path.join(__dirname, 'backoffice');
 const businessBioPath = path.join(dataDir, 'business-bio.json');
 const bankInfoPath = path.join(dataDir, 'bank-info.json');
 const siteAccessPath = path.join(dataDir, 'site-access.json');
+const backofficeAuthPath = path.join(dataDir, 'backoffice-auth.json');
 
 const STORAGE_KEYS = {
   products: 'sobella:products',
@@ -27,6 +28,7 @@ const STORAGE_KEYS = {
   businessBio: 'sobella:businessBio',
   bankInfo: 'sobella:bankInfo',
   siteAccess: 'sobella:siteAccess',
+  backofficeAuth: 'sobella:backofficeAuth',
 };
 
 const defaultProducts = [
@@ -78,6 +80,10 @@ const defaultSiteAccess = {
   enabled: true,
   reason: '',
   updatedAt: null,
+};
+const defaultBackofficeAuth = {
+  username: String(process.env.BACKOFFICE_USERNAME || 'admin').trim() || 'admin',
+  password: String(process.env.BACKOFFICE_PASSWORD || 'sobella-admin'),
 };
 
 app.set('trust proxy', true);
@@ -131,6 +137,77 @@ function normalizeSiteAccess(state) {
     reason: String(state?.reason || ''),
     updatedAt: state?.updatedAt || null,
   };
+}
+
+function normalizeBackofficeAuth(value) {
+  const username = String(value?.username || '').trim();
+  const password = String(value?.password || '');
+  if (!username || !password) {
+    return defaultBackofficeAuth;
+  }
+  return { username, password };
+}
+
+function validatePasswordStrength(password) {
+  if (typeof password !== 'string' || password.length < 8) {
+    return false;
+  }
+  if (!/[A-Z]/.test(password)) {
+    return false;
+  }
+  if (!/[a-z]/.test(password)) {
+    return false;
+  }
+  if (!/[0-9]/.test(password)) {
+    return false;
+  }
+  return /[^A-Za-z0-9]/.test(password);
+}
+
+function getBackofficeResetSecret() {
+  return String(process.env.BACKOFFICE_RESET_KEY || '').trim()
+    || String(process.env.OWNER_ACCESS_KEY || '').trim()
+    || String(process.env.SITE_ACCESS_TOGGLE_KEY || '').trim();
+}
+
+async function readBackofficeAuth() {
+  const stored = await readStore(STORAGE_KEYS.backofficeAuth, backofficeAuthPath, defaultBackofficeAuth);
+  const normalized = normalizeBackofficeAuth(stored);
+  if (normalized.username !== stored?.username || normalized.password !== stored?.password) {
+    await writeStore(STORAGE_KEYS.backofficeAuth, backofficeAuthPath, normalized);
+  }
+  return normalized;
+}
+
+function parseBasicAuth(req) {
+  const authHeader = String(req.headers.authorization || '');
+  if (!authHeader.startsWith('Basic ')) {
+    return null;
+  }
+
+  try {
+    const encoded = authHeader.slice(6).trim();
+    const decoded = Buffer.from(encoded, 'base64').toString('utf8');
+    const separatorIndex = decoded.indexOf(':');
+    if (separatorIndex <= 0) {
+      return null;
+    }
+    return {
+      username: decoded.slice(0, separatorIndex),
+      password: decoded.slice(separatorIndex + 1),
+    };
+  } catch (error) {
+    return null;
+  }
+}
+
+async function isBackofficeAuthorized(req) {
+  const credentials = parseBasicAuth(req);
+  if (!credentials) {
+    return false;
+  }
+  const expected = await readBackofficeAuth();
+  return credentials.username === expected.username && credentials.password === expected.password;
 }
 
 async function readSiteAccess() {
@@ -259,6 +336,59 @@ app.post('/api/owner/site-access', async (req, res) => {
 
   const updated = await writeSiteAccess({ enabled, reason });
   return res.json({ success: true, siteAccess: updated });
+});
+
+app.get('/api/backoffice/credentials', async (req, res) => {
+  if (!(await isBackofficeAuthorized(req))) {
+    return res.status(401).json({ error: 'Authentication required.' });
+  }
+
+  const credentials = await readBackofficeAuth();
+  return res.json({ username: credentials.username });
+});
+
+app.post('/api/backoffice/credentials', async (req, res) => {
+  if (!(await isBackofficeAuthorized(req))) {
+    return res.status(401).json({ error: 'Authentication required.' });
+  }
+
+  const username = String(req.body?.username || '').trim();
+  const password = String(req.body?.password || '');
+  if (!username) {
+    return res.status(400).json({ error: 'Username is required.' });
+  }
+  if (!validatePasswordStrength(password)) {
+    return res.status(400).json({ error: 'Password must be at least 8 characters and include uppercase, lowercase, number, and special character.' });
+  }
+
+  const nextCredentials = { username, password };
+  await writeStore(STORAGE_KEYS.backofficeAuth, backofficeAuthPath, nextCredentials);
+  return res.json({ success: true, username });
+});
+
+app.post('/api/backoffice/reset-password', async (req, res) => {
+  const secret = getBackofficeResetSecret();
+  if (!secret) {
+    return res.status(503).json({ error: 'Password reset is not configured on the server.' });
+  }
+
+  const resetKey = String(req.body?.resetKey || '').trim();
+  if (!resetKey || resetKey !== secret) {
+    return res.status(401).json({ error: 'Invalid reset key.' });
+  }
+
+  const username = String(req.body?.username || '').trim();
+  const password = String(req.body?.password || '');
+  if (!username) {
+    return res.status(400).json({ error: 'Username is required.' });
+  }
+  if (!validatePasswordStrength(password)) {
+    return res.status(400).json({ error: 'Password must be at least 8 characters and include uppercase, lowercase, number, and special character.' });
+  }
+
+  const nextCredentials = { username, password };
+  await writeStore(STORAGE_KEYS.backofficeAuth, backofficeAuthPath, nextCredentials);
+  return res.json({ success: true, username });
 });
 
 app.get('/api/owner/site-access/:action', async (req, res) => {

@@ -15,6 +15,11 @@ const credentialsForm = document.getElementById('credentialsForm');
 const newAdminUsername = document.getElementById('newAdminUsername');
 const newAdminPassword = document.getElementById('newAdminPassword');
 const credentialsStatus = document.getElementById('credentialsStatus');
+const resetCredentialsForm = document.getElementById('resetCredentialsForm');
+const resetKeyInput = document.getElementById('resetKey');
+const resetAdminUsername = document.getElementById('resetAdminUsername');
+const resetAdminPassword = document.getElementById('resetAdminPassword');
+const resetCredentialsStatus = document.getElementById('resetCredentialsStatus');
 const productRefreshChannel = window.BroadcastChannel ? new BroadcastChannel('sobella-products') : null;
 const apiBase = window.location.protocol === 'file:' ? 'http://localhost:3001' : window.location.origin;
 const backofficeAuth = window.sobellaBackofficeAuth;
@@ -43,6 +48,19 @@ function setCredentialsStatus(message, isError = false) {
   }
   credentialsStatus.classList.add('show');
   credentialsStatus.classList.add(isError ? 'error' : 'success');
+}
+
+function setResetStatus(message, isError = false) {
+  if (!resetCredentialsStatus) {
+    return;
+  }
+  resetCredentialsStatus.textContent = message || '';
+  resetCredentialsStatus.classList.remove('success', 'error', 'show');
+  if (!message) {
+    return;
+  }
+  resetCredentialsStatus.classList.add('show');
+  resetCredentialsStatus.classList.add(isError ? 'error' : 'success');
 }
 
 function isStrongPassword(password) {
@@ -395,6 +413,59 @@ if (credentialsForm) {
     } catch (error) {
       setLoginStatus(error.message || 'Unable to update credentials.', true);
       setCredentialsStatus(error.message || 'Unable to update credentials.', true);
+    }
+  });
+}
+
+if (resetCredentialsForm) {
+  resetCredentialsForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const resetKey = resetKeyInput?.value.trim() || '';
+    const username = resetAdminUsername?.value.trim() || '';
+    const password = resetAdminPassword?.value || '';
+
+    if (!resetKey) {
+      setResetStatus('Enter the reset key.', true);
+      return;
+    }
+
+    if (!username) {
+      setResetStatus('Enter a new username.', true);
+      return;
+    }
+
+    if (!isStrongPassword(password)) {
+      setResetStatus('Password must be 8+ chars with uppercase, lowercase, number, and special character.', true);
+      return;
+    }
+
+    try {
+      const response = await fetch(apiUrl('/api/backoffice/reset-password'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resetKey, username, password }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || 'Unable to reset credentials.');
+      }
+
+      backofficeAuth.setCredentials(username, password);
+      hasAuthenticatedSession = true;
+      if (resetKeyInput) {
+        resetKeyInput.value = '';
+      }
+      if (resetAdminPassword) {
+        resetAdminPassword.value = '';
+      }
+      updateLoginForm();
+      setLoginStatus('Backoffice credentials reset.');
+      setCredentialsStatus('');
+      setResetStatus('Credentials reset successfully. You are now signed in.');
+      loadBackofficeData();
+    } catch (error) {
+      setResetStatus(error.message || 'Unable to reset credentials.', true);
     }
   });
 }

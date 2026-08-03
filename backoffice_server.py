@@ -71,6 +71,14 @@ def validate_password_strength(password):
     return has_upper and has_lower and has_digit and has_special
 
 
+def get_backoffice_reset_secret():
+    return (
+        str(os.getenv('BACKOFFICE_RESET_KEY', '')).strip()
+        or str(os.getenv('OWNER_ACCESS_KEY', '')).strip()
+        or str(os.getenv('SITE_ACCESS_TOGGLE_KEY', '')).strip()
+    )
+
+
 class BackofficeHandler(BaseHTTPRequestHandler):
     def is_owner_authorized(self, key_override=''):
         secret = str(os.getenv('SITE_ACCESS_TOGGLE_KEY', '')).strip() or str(os.getenv('OWNER_ACCESS_KEY', '')).strip()
@@ -132,6 +140,9 @@ class BackofficeHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path == '/api/owner/site-access':
             self.handle_owner_site_access()
+            return
+        if parsed.path == '/api/backoffice/reset-password':
+            self.handle_backoffice_credentials_reset()
             return
 
         if load_site_access().get('enabled') is False:
@@ -279,6 +290,41 @@ class BackofficeHandler(BaseHTTPRequestHandler):
             data = json.loads(body)
         except json.JSONDecodeError:
             self.send_json({'error': 'Invalid JSON payload.'}, status=400)
+            return
+
+        username = str(data.get('username', '')).strip()
+        password = str(data.get('password', ''))
+
+        if not username:
+            self.send_json({'error': 'Username is required.'}, status=400)
+            return
+
+        if not validate_password_strength(password):
+            self.send_json({'error': 'Password must be at least 8 characters and include uppercase, lowercase, number, and special character.'}, status=400)
+            return
+
+        write_json(BACKOFFICE_AUTH_PATH, {
+            'username': username,
+            'password': password,
+        })
+        self.send_json({'success': True, 'username': username})
+
+    def handle_backoffice_credentials_reset(self):
+        length = int(self.headers.get('Content-Length', 0))
+        body = self.rfile.read(length).decode('utf-8') if length else '{}'
+        try:
+            data = json.loads(body)
+        except json.JSONDecodeError:
+            self.send_json({'error': 'Invalid JSON payload.'}, status=400)
+            return
+
+        reset_key = str(data.get('resetKey', '')).strip()
+        secret = get_backoffice_reset_secret()
+        if not secret:
+            self.send_json({'error': 'Password reset is not configured on the server.'}, status=503)
+            return
+        if not reset_key or reset_key != secret:
+            self.send_json({'error': 'Invalid reset key.'}, status=401)
             return
 
         username = str(data.get('username', '')).strip()

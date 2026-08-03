@@ -36,6 +36,17 @@
         <p class="char-count">Password must be at least 8 characters and include uppercase, lowercase, number, and special character.</p>
       </section>
       <section class="admin-section">
+        <h2>Locked out? Reset access</h2>
+        <form id="resetCredentialsForm" class="checkout-form">
+          <input type="password" id="resetKey" placeholder="Reset key" autocomplete="off" required />
+          <input type="text" id="resetAdminUsername" placeholder="New username" autocomplete="off" required />
+          <input type="password" id="resetAdminPassword" placeholder="New password" autocomplete="new-password" required />
+          <button type="submit">Reset and sign in</button>
+        </form>
+        <p id="resetCredentialsStatus" class="credential-status" role="status" aria-live="polite"></p>
+        <p class="char-count">Use the BACKOFFICE_RESET_KEY value configured on the server.</p>
+      </section>
+      <section class="admin-section">
         <h2>Business bio</h2>
         <form id="bioForm" class="checkout-form">
           <textarea id="bioText" maxlength="500" rows="6" placeholder="Write a short bio or description for the business..."></textarea>
