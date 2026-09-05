@@ -52,27 +52,6 @@ class StorefrontTests(unittest.TestCase):
             self.assertIn('bio', data)
             self.assertTrue(data['bio'])
 
-    def test_process_payment_accepts_valid_card_and_rejects_invalid_card(self):
-        spec = importlib.util.spec_from_file_location('server', os.path.join(ROOT, 'server.py'))
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-
-        success, message = module.process_payment('card', {
-            'cardNumber': '4242424242424242',
-            'expiry': '12/30',
-            'cvc': '123',
-        })
-        self.assertTrue(success)
-        self.assertIn('processed', message.lower())
-
-        failed, error = module.process_payment('card', {
-            'cardNumber': '4111111111111111',
-            'expiry': '01/20',
-            'cvc': '12',
-        })
-        self.assertFalse(failed)
-        self.assertIn('failed', error.lower())
-
     def test_delete_product_removes_it_from_inventory(self):
         spec = importlib.util.spec_from_file_location('server', os.path.join(ROOT, 'server.py'))
         module = importlib.util.module_from_spec(spec)
@@ -91,6 +70,64 @@ class StorefrontTests(unittest.TestCase):
             result = module.update_product('TEST-2', {'operation': 'delete'})
             self.assertTrue(result['deleted'])
             self.assertEqual(module.load_products(), [])
+
+    def test_update_product_replaces_existing_image(self):
+        spec = importlib.util.spec_from_file_location('server', os.path.join(ROOT, 'server.py'))
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            module.DATA_DIR = temp_dir
+            module.PRODUCTS_PATH = os.path.join(temp_dir, 'products.json')
+            module.ORDERS_PATH = os.path.join(temp_dir, 'orders.json')
+            module.BIO_PATH = os.path.join(temp_dir, 'business-bio.json')
+            module.BANK_INFO_PATH = os.path.join(temp_dir, 'bank-info.json')
+            module.UPLOADS_DIR = os.path.join(temp_dir, 'uploads')
+            module.ensure_data_files()
+
+            old_image_url = module.save_uploaded_image({
+                'filename': 'old.png',
+                'content': 'b2xk'
+            })
+            with open(module.PRODUCTS_PATH, 'w', encoding='utf-8') as fh:
+                json.dump([{"sku": "TEST-3", "category": "rings", "name": "Replace Me", "description": "", "price": 10, "stock": 2, "image": old_image_url}], fh)
+
+            updated = module.update_product('TEST-3', {
+                'imageFile': {
+                    'filename': 'new.png',
+                    'content': 'bmV3'
+                }
+            })
+
+            self.assertNotEqual(updated['image'], old_image_url)
+            self.assertFalse(os.path.exists(os.path.join(temp_dir, 'uploads', os.path.basename(old_image_url))))
+            self.assertTrue(os.path.exists(os.path.join(temp_dir, 'uploads', os.path.basename(updated['image']))))
+
+    def test_update_product_can_remove_existing_image(self):
+        spec = importlib.util.spec_from_file_location('server', os.path.join(ROOT, 'server.py'))
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            module.DATA_DIR = temp_dir
+            module.PRODUCTS_PATH = os.path.join(temp_dir, 'products.json')
+            module.ORDERS_PATH = os.path.join(temp_dir, 'orders.json')
+            module.BIO_PATH = os.path.join(temp_dir, 'business-bio.json')
+            module.BANK_INFO_PATH = os.path.join(temp_dir, 'bank-info.json')
+            module.UPLOADS_DIR = os.path.join(temp_dir, 'uploads')
+            module.ensure_data_files()
+
+            image_url = module.save_uploaded_image({
+                'filename': 'sample.png',
+                'content': 'ZmlsZQ=='
+            })
+            with open(module.PRODUCTS_PATH, 'w', encoding='utf-8') as fh:
+                json.dump([{"sku": "TEST-4", "category": "rings", "name": "Remove Image", "description": "", "price": 10, "stock": 2, "image": image_url}], fh)
+
+            updated = module.update_product('TEST-4', {'removeImage': True})
+
+            self.assertEqual(updated['image'], '')
+            self.assertFalse(os.path.exists(os.path.join(temp_dir, 'uploads', os.path.basename(image_url))))
 
     def test_save_uploaded_image_writes_file_and_returns_url(self):
         spec = importlib.util.spec_from_file_location('server', os.path.join(ROOT, 'server.py'))

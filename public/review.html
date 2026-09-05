@@ -54,15 +54,11 @@
           <div class="checkout-section">
             <h3>Payment</h3>
             <select name="paymentMethod" id="paymentMethod">
-              <option value="card">Credit card</option>
+              <option value="card">Credit card via Stripe</option>
               <option value="bank">Bank transfer</option>
             </select>
             <div id="cardFields" class="card-fields">
-              <input type="text" name="cardNumber" inputmode="numeric" autocomplete="cc-number" placeholder="Card number" />
-              <div class="card-row">
-                <input type="text" name="expiry" inputmode="numeric" placeholder="MM/YY" />
-                <input type="text" name="cvc" inputmode="numeric" autocomplete="cc-csc" placeholder="CVC" />
-              </div>
+              <p class="status">Card payments are completed on Stripe's hosted checkout page after you confirm your order.</p>
             </div>
           </div>
 

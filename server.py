@@ -162,9 +162,12 @@ def save_uploaded_image(uploaded_file):
     if not content:
         return ''
 
+    uploads_dir = resolve_path(UPLOADS_DIR)
+    uploads_dir.mkdir(parents=True, exist_ok=True)
+
     ext = Path(filename).suffix.lower()
     safe_name = f"{Path(filename).stem}-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}{ext}"
-    destination = resolve_path(UPLOADS_DIR) / safe_name
+    destination = uploads_dir / safe_name
 
     if isinstance(content, str):
         if content.startswith('data:'):
@@ -183,6 +186,17 @@ def save_uploaded_image(uploaded_file):
     with destination.open('wb') as fh:
         fh.write(content_bytes)
     return f'/uploads/{safe_name}'
+
+
+def remove_uploaded_image(image_url):
+    if not image_url or not isinstance(image_url, str) or not image_url.startswith('/uploads/'):
+        return
+
+    image_path = resolve_path(UPLOADS_DIR) / Path(image_url).name
+    try:
+        image_path.unlink()
+    except FileNotFoundError:
+        return
 
 
 def load_products():
@@ -265,6 +279,7 @@ def update_product(sku, updates):
             elif operation == 'decrease':
                 product['stock'] = max(0, int(product.get('stock', 0)) - 1)
             elif operation == 'delete':
+                remove_uploaded_image(product.get('image', ''))
                 products.remove(product)
                 write_json(resolve_path(PRODUCTS_PATH), products)
                 return {'deleted': True, 'sku': sku}
@@ -273,16 +288,22 @@ def update_product(sku, updates):
                     if key in updates:
                         if key == 'stock':
                             product[key] = int(updates[key])
+                        elif key == 'price':
+                            product[key] = float(updates[key])
                         else:
                             product[key] = updates[key]
-            if 'price' in updates and 'price' not in ('restock', 'decrease', 'delete'):
-                product['price'] = updates['price']
-            if 'category' in updates and updates.get('operation') not in ('restock', 'decrease', 'delete'):
-                product['category'] = updates['category']
-            if 'description' in updates and updates.get('operation') not in ('restock', 'decrease', 'delete'):
-                product['description'] = updates['description']
-            if 'name' in updates and updates.get('operation') not in ('restock', 'decrease', 'delete'):
-                product['name'] = updates['name']
+
+                image_file = updates.get('imageFile')
+                remove_image = bool(updates.get('removeImage'))
+                if image_file:
+                    new_image_path = save_uploaded_image(image_file)
+                    if new_image_path:
+                        remove_uploaded_image(product.get('image', ''))
+                        product['image'] = new_image_path
+                elif remove_image:
+                    remove_uploaded_image(product.get('image', ''))
+                    product['image'] = ''
+
             write_json(resolve_path(PRODUCTS_PATH), products)
             return product
     raise KeyError(f'Product {sku} not found')
@@ -380,43 +401,6 @@ def get_stripe():
         return None
     stripe.api_key = secret_key
     return stripe
-
-
-def process_payment(payment_method, card_data=None):
-    if payment_method != 'card':
-        return True, 'Bank transfer selected. No card payment required.'
-
-    card_data = card_data or {}
-    card_number = str(card_data.get('cardNumber', '')).replace(' ', '')
-    expiry = str(card_data.get('expiry', '')).strip()
-    cvc = str(card_data.get('cvc', '')).strip()
-
-    if len(card_number) < 12 or len(card_number) > 19:
-        return False, 'Payment failed: invalid card number.'
-    if len(cvc) < 3:
-        return False, 'Payment failed: invalid CVC.'
-    if '/' not in expiry:
-        return False, 'Payment failed: invalid expiry date.'
-
-    expiry_month, expiry_year = expiry.split('/', 1)
-    if not expiry_month.isdigit() or not expiry_year.isdigit():
-        return False, 'Payment failed: invalid expiry date.'
-
-    if expiry_month.startswith('0') and len(expiry_month) == 2:
-        expiry_month = expiry_month[1:]
-    expiry_month = int(expiry_month)
-    expiry_year = int(expiry_year)
-
-    if expiry_month < 1 or expiry_month > 12:
-        return False, 'Payment failed: invalid expiry month.'
-
-    if expiry_year < 24:
-        return False, 'Payment failed: card expired.'
-
-    if card_number.endswith('1111') or card_number.endswith('0000'):
-        return False, 'Payment failed: card was declined.'
-
-    return True, 'Payment processed successfully.'
 
 
 def create_checkout_session(customer_name, email, items, payment_method='card'):
@@ -681,17 +665,10 @@ class JewelryHandler(BaseHTTPRequestHandler):
         email = data.get('email', '').strip()
         items = data.get('items', [])
         payment_method = data.get('paymentMethod', 'card')
-        card_data = data.get('cardData', {})
 
         if not customer_name or not email or not items:
             self.send_json({'error': 'Please complete the checkout form.'}, status=400)
             return
-
-        if payment_method == 'card':
-            success, message = process_payment(payment_method, card_data)
-            if not success:
-                self.send_json({'success': False, 'error': message}, status=400)
-                return
 
         try:
             result = create_checkout_session(customer_name, email, items, payment_method)

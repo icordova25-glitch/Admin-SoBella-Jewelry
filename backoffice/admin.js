@@ -11,6 +11,11 @@ const loginStatus = document.getElementById('loginStatus');
 const logoutButton = document.getElementById('logoutButton');
 const loginSubmitButton = document.getElementById('loginSubmitButton');
 const adminLoginHeading = document.getElementById('adminLoginHeading');
+const imageUploadInput = document.getElementById('imageUpload');
+const removeImageInput = document.getElementById('removeImage');
+const editingSkuInput = document.getElementById('editingSku');
+const productSubmitButton = document.getElementById('productSubmitButton');
+const cancelEditButton = document.getElementById('cancelEditButton');
 const productRefreshChannel = window.BroadcastChannel ? new BroadcastChannel('sobella-products') : null;
 const apiBase = window.location.protocol === 'file:' ? 'http://localhost:3001' : window.location.origin;
 const backofficeAuth = window.sobellaBackofficeAuth;
@@ -80,6 +85,50 @@ function notifyProductRefresh() {
   localStorage.setItem('sobella-product-refresh', String(Date.now()));
 }
 
+function resetProductForm() {
+  productForm.reset();
+  if (editingSkuInput) {
+    editingSkuInput.value = '';
+  }
+  const skuField = document.getElementById('sku');
+  if (skuField) {
+    skuField.readOnly = false;
+  }
+  if (productSubmitButton) {
+    productSubmitButton.textContent = 'Create product';
+  }
+  if (cancelEditButton) {
+    cancelEditButton.hidden = true;
+  }
+}
+
+function startEditingProduct(product) {
+  if (editingSkuInput) {
+    editingSkuInput.value = product.sku;
+  }
+  document.getElementById('sku').value = product.sku || '';
+  document.getElementById('sku').readOnly = true;
+  document.getElementById('name').value = product.name || '';
+  document.getElementById('category').value = product.category || '';
+  document.getElementById('description').value = product.description || '';
+  document.getElementById('price').value = product.price ?? 0;
+  document.getElementById('stock').value = product.stock ?? 0;
+  if (removeImageInput) {
+    removeImageInput.checked = false;
+  }
+  if (imageUploadInput) {
+    imageUploadInput.value = '';
+  }
+  if (productSubmitButton) {
+    productSubmitButton.textContent = 'Save product';
+  }
+  if (cancelEditButton) {
+    cancelEditButton.hidden = false;
+  }
+  setLoginStatus(`Editing ${product.name}. Choose a new image to replace the current one.`);
+  productForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 async function loadBusinessBio() {
   const response = await backofficeRequest('/api/business-bio');
   const data = await response.json();
@@ -143,6 +192,7 @@ async function loadAdminProducts() {
       <td>$${product.price}</td>
       <td>${product.stock}</td>
       <td>
+        <button class="inventory-btn secondary" data-action="edit" data-sku="${product.sku}">Edit</button>
         <button class="inventory-btn" data-action="restock" data-sku="${product.sku}">+1</button>
         <button class="inventory-btn" data-action="decrease" data-sku="${product.sku}">-1</button>
         <button class="inventory-btn delete" data-action="delete" data-sku="${product.sku}">×</button>
@@ -152,6 +202,10 @@ async function loadAdminProducts() {
       button.addEventListener('click', () => {
         if (button.dataset.action === 'preview') {
           showImagePreview(button.dataset.image);
+          return;
+        }
+        if (button.dataset.action === 'edit') {
+          startEditingProduct(product);
           return;
         }
         updateStock(product.sku, button.dataset.action);
@@ -261,7 +315,8 @@ if (bankForm) {
 
 productForm.addEventListener('submit', async (event) => {
   event.preventDefault();
-  const imageFile = document.getElementById('imageUpload').files[0];
+  const editingSku = editingSkuInput?.value || '';
+  const imageFile = imageUploadInput?.files[0];
   const payload = {
     sku: document.getElementById('sku').value,
     name: document.getElementById('name').value,
@@ -269,6 +324,7 @@ productForm.addEventListener('submit', async (event) => {
     description: document.getElementById('description').value,
     price: Number(document.getElementById('price').value),
     stock: Number(document.getElementById('stock').value),
+    removeImage: Boolean(removeImageInput?.checked),
   };
 
   if (imageFile) {
@@ -280,19 +336,26 @@ productForm.addEventListener('submit', async (event) => {
   }
 
   try {
-    await backofficeRequest('/api/admin/products', {
-      method: 'POST',
+    await backofficeRequest(editingSku ? `/api/admin/products/${encodeURIComponent(editingSku)}` : '/api/admin/products', {
+      method: editingSku ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-    productForm.reset();
-    setLoginStatus('Product created.');
+    resetProductForm();
+    setLoginStatus(editingSku ? 'Product updated.' : 'Product created.');
     loadAdminProducts();
     notifyProductRefresh();
   } catch (error) {
     setLoginStatus(error.message, true);
   }
 });
+
+if (cancelEditButton) {
+  cancelEditButton.addEventListener('click', () => {
+    resetProductForm();
+    setLoginStatus('Edit cancelled.');
+  });
+}
 
 if (loginForm) {
   loginForm.addEventListener('submit', (event) => {

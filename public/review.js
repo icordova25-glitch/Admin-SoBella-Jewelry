@@ -92,9 +92,6 @@ function saveCheckoutInfo() {
     shippingState: checkoutForm.shippingState?.value || '',
     shippingZip: checkoutForm.shippingZip?.value || '',
     paymentMethod: checkoutForm.paymentMethod?.value || 'card',
-    cardNumber: checkoutForm.cardNumber?.value || '',
-    expiry: checkoutForm.expiry?.value || '',
-    cvc: checkoutForm.cvc?.value || '',
   };
   localStorage.setItem('sobella-checkout-info', JSON.stringify(fields));
 }
@@ -125,9 +122,6 @@ function loadCheckoutInfo() {
     if (checkoutForm.paymentMethod) {
       checkoutForm.paymentMethod.value = data.paymentMethod || 'card';
     }
-    checkoutForm.cardNumber.value = data.cardNumber || '';
-    checkoutForm.expiry.value = data.expiry || '';
-    checkoutForm.cvc.value = data.cvc || '';
   } catch (error) {
     console.warn('Unable to load saved checkout info', error);
   }
@@ -137,12 +131,6 @@ function updateCardFieldsVisibility() {
   const selected = paymentMethodSelect.value;
   const isCard = selected === 'card';
   cardFields.hidden = !isCard;
-  cardFields.querySelectorAll('input').forEach((input) => {
-    input.disabled = !isCard;
-    if (!isCard) {
-      input.value = '';
-    }
-  });
 }
 
 function paymentMethodForApi(selectedMethod) {
@@ -368,11 +356,6 @@ checkoutForm.addEventListener('submit', async (event) => {
       city: checkoutForm.shippingCity?.value || '',
       state: checkoutForm.shippingState?.value || '',
       zip: checkoutForm.shippingZip?.value || '',
-    },
-    cardData: isApplePaySelected() ? {} : {
-      cardNumber: checkoutForm.cardNumber?.value || '',
-      expiry: checkoutForm.expiry?.value || '',
-      cvc: checkoutForm.cvc?.value || '',
     },
     items: cart.map((item) => ({ sku: item.sku, quantity: item.quantity })),
   };
