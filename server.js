@@ -461,7 +461,7 @@ app.get('/api/orders', async (req, res) => {
   res.json(orders);
 });
 
-app.get('/api/business-bio', requireBackofficeAuth, async (req, res) => {
+app.get('/api/business-bio', async (req, res) => {
   const bio = await readStore(STORAGE_KEYS.businessBio, businessBioPath, defaultBusinessBio);
   res.json(bio);
 });
