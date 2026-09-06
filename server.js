@@ -13,6 +13,7 @@ try {
 
 const app = express();
 const port = process.env.PORT || 3000;
+const uploadBodyLimit = `${Number(process.env.UPLOAD_BODY_LIMIT_MB || 12)}mb`;
 const dataDir = path.join(__dirname, 'data');
 const productsPath = path.join(dataDir, 'products.json');
 const ordersPath = path.join(dataDir, 'orders.json');
@@ -83,7 +84,7 @@ const defaultSiteAccess = {
 };
 
 app.set('trust proxy', true);
-app.use(express.json());
+app.use(express.json({ limit: uploadBodyLimit }));
 
 function readJson(filePath, fallback) {
   if (!fs.existsSync(filePath)) {
