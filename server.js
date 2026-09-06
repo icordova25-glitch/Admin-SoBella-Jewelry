@@ -1,6 +1,7 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 let kv = null;
 
 try {
@@ -15,6 +16,7 @@ const app = express();
 const port = process.env.PORT || 3000;
 const uploadBodyLimit = `${Number(process.env.UPLOAD_BODY_LIMIT_MB || 12)}mb`;
 const dataDir = path.join(__dirname, 'data');
+const uploadsDir = path.join(__dirname, 'uploads');
 const productsPath = path.join(dataDir, 'products.json');
 const ordersPath = path.join(dataDir, 'orders.json');
 const backofficeDir = path.join(__dirname, 'backoffice');
@@ -100,6 +102,59 @@ function readJson(filePath, fallback) {
 
 function writeJson(filePath, data) {
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+}
+
+function ensureUploadsDir() {
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  }
+}
+
+function saveUploadedImage(imageFile) {
+  if (!imageFile || typeof imageFile !== 'object') {
+    return '';
+  }
+
+  const filename = String(imageFile.filename || '').trim();
+  const rawContent = imageFile.content;
+  if (!filename || !rawContent) {
+    return '';
+  }
+
+  let base64Content = String(rawContent);
+  if (base64Content.startsWith('data:')) {
+    const commaIndex = base64Content.indexOf(',');
+    if (commaIndex >= 0) {
+      base64Content = base64Content.slice(commaIndex + 1);
+    }
+  }
+
+  const extension = path.extname(filename).toLowerCase();
+  const safeStem = path
+    .basename(filename, extension)
+    .replace(/[^a-zA-Z0-9-_]/g, '-')
+    .slice(0, 60) || 'image';
+  const safeName = `${safeStem}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}${extension}`;
+
+  ensureUploadsDir();
+  const destination = path.join(uploadsDir, safeName);
+  const contentBuffer = Buffer.from(base64Content, 'base64');
+  fs.writeFileSync(destination, contentBuffer);
+  return `/uploads/${safeName}`;
+}
+
+function removeUploadedImage(imageUrl) {
+  if (!imageUrl || typeof imageUrl !== 'string' || !imageUrl.startsWith('/uploads/')) {
+    return;
+  }
+  const fileName = path.basename(imageUrl);
+  if (!fileName) {
+    return;
+  }
+  const targetPath = path.join(uploadsDir, fileName);
+  if (fs.existsSync(targetPath)) {
+    fs.unlinkSync(targetPath);
+  }
 }
 
 function hasKvConfigured() {
@@ -328,6 +383,7 @@ app.use('/backoffice', (req, res, next) => {
   next();
 });
 app.use('/backoffice', express.static(backofficeDir));
+app.use('/uploads', express.static(uploadsDir));
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/api/products', async (req, res) => {
@@ -459,7 +515,7 @@ app.post('/api/admin/products', requireBackofficeAuth, async (req, res) => {
     description: String(payload.description || '').trim(),
     price: Number(payload.price || 0),
     stock: Number(payload.stock || 0),
-    image: String(payload.image || ''),
+    image: payload.imageFile ? saveUploadedImage(payload.imageFile) : String(payload.image || ''),
   };
 
   products.push(product);
@@ -485,6 +541,7 @@ app.put('/api/admin/products/:sku', requireBackofficeAuth, async (req, res) => {
   } else if (operation === 'decrease') {
     product.stock = Math.max(0, Number(product.stock || 0) - 1);
   } else if (operation === 'delete') {
+    removeUploadedImage(product.image);
     products.splice(index, 1);
     await writeStore(STORAGE_KEYS.products, productsPath, products);
     return res.json({ deleted: true, sku });
@@ -504,7 +561,16 @@ app.put('/api/admin/products/:sku', requireBackofficeAuth, async (req, res) => {
     if (updates.stock !== undefined) {
       product.stock = Math.max(0, Number(updates.stock));
     }
-    if (updates.image !== undefined) {
+    if (updates.imageFile) {
+      const newImage = saveUploadedImage(updates.imageFile);
+      if (newImage) {
+        removeUploadedImage(product.image);
+        product.image = newImage;
+      }
+    } else if (updates.removeImage) {
+      removeUploadedImage(product.image);
+      product.image = '';
+    } else if (updates.image !== undefined) {
       product.image = String(updates.image || '');
     }
   }
