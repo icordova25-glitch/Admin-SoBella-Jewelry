@@ -350,10 +350,36 @@ body.drawer-open .drawer-backdrop {
 .login-card h1 {
   margin: 0 0 0.5rem;
 }
+.login-brand-lockup {
+  display: grid;
+  justify-items: start;
+  gap: 0.35rem;
+  margin-bottom: 0.8rem;
+}
+.login-mark {
+  margin: 0;
+  font-size: 3rem;
+  line-height: 1;
+  color: #a77546;
+  font-family: 'Georgia', 'Times New Roman', serif;
+}
+.login-eyebrow {
+  margin-bottom: 0;
+  color: var(--accent);
+}
 .login-copy {
   margin: 0 0 1rem;
   color: var(--muted);
   line-height: 1.6;
+}
+.login-destination,
+.login-saved-notice {
+  margin: 0 0 0.85rem;
+  font-size: 0.95rem;
+  color: var(--text);
+}
+.login-saved-notice {
+  color: var(--muted);
 }
 .login-actions {
   display: flex;

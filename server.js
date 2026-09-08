@@ -581,7 +581,11 @@ app.put('/api/admin/products/:sku', requireBackofficeAuth, async (req, res) => {
 });
 
 app.get('/backoffice', (req, res) => {
-  res.sendFile(path.join(backofficeDir, 'admin.html'));
+  res.redirect(302, '/backoffice/login.html');
+});
+
+app.get('/backoffice/login', (req, res) => {
+  res.redirect(302, '/backoffice/login.html');
 });
 
 app.get('/backoffice/admin', (req, res) => {
@@ -593,19 +597,23 @@ app.get('/backoffice/orders', (req, res) => {
 });
 
 app.get('/admin', (req, res) => {
-  res.redirect(302, '/backoffice/admin.html');
+  res.redirect(302, '/backoffice/login.html?returnTo=admin.html');
 });
 
 app.get('/admin.html', (req, res) => {
-  res.redirect(302, '/backoffice/admin.html');
+  res.redirect(302, '/backoffice/login.html?returnTo=admin.html');
 });
 
 app.get('/orders', (req, res) => {
-  res.redirect(302, '/backoffice/orders.html');
+  res.redirect(302, '/backoffice/login.html?returnTo=orders.html');
 });
 
 app.get('/orders.html', (req, res) => {
-  res.redirect(302, '/backoffice/orders.html');
+  res.redirect(302, '/backoffice/login.html?returnTo=orders.html');
+});
+
+app.get('/staff-login', (req, res) => {
+  res.redirect(302, '/backoffice/login.html');
 });
 
 app.get('/review', (req, res) => {
@@ -613,7 +621,7 @@ app.get('/review', (req, res) => {
 });
 
 app.get('/backoffice/*', (req, res) => {
-  res.redirect(302, '/backoffice/admin.html');
+  res.redirect(302, '/backoffice/login.html');
 });
 
 app.get('*', (req, res) => {

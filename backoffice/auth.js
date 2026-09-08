@@ -1,4 +1,7 @@
 const BACKOFFICE_AUTH_KEY = 'sobella-backoffice-auth';
+const BACKOFFICE_LOGIN_FILE = 'login.html';
+const DEFAULT_BACKOFFICE_TARGET = 'admin.html';
+const ALLOWED_BACKOFFICE_TARGETS = new Set(['admin.html', 'orders.html']);
 
 function toBasicAuthToken(username, password) {
   return `Basic ${btoa(`${username}:${password}`)}`;
@@ -108,15 +111,38 @@ function getAuthHeader() {
 
 function getReturnToPath() {
   const fileName = window.location.pathname.split('/').pop() || 'admin.html';
-  if (fileName === 'login.html') {
-    return 'admin.html';
+  if (fileName === BACKOFFICE_LOGIN_FILE) {
+    return DEFAULT_BACKOFFICE_TARGET;
   }
-  return `${fileName}${window.location.search || ''}${window.location.hash || ''}`;
+  return sanitizeReturnToPath(`${fileName}${window.location.search || ''}${window.location.hash || ''}`);
 }
 
-function redirectToLogin(message = '') {
+function sanitizeReturnToPath(input) {
+  const candidate = String(input || '').trim();
+  if (!candidate) {
+    return DEFAULT_BACKOFFICE_TARGET;
+  }
+
+  try {
+    const normalized = new URL(candidate, `${window.location.origin}/backoffice/`);
+    if (normalized.origin !== window.location.origin) {
+      return DEFAULT_BACKOFFICE_TARGET;
+    }
+
+    const fileName = normalized.pathname.split('/').pop() || DEFAULT_BACKOFFICE_TARGET;
+    if (!ALLOWED_BACKOFFICE_TARGETS.has(fileName)) {
+      return DEFAULT_BACKOFFICE_TARGET;
+    }
+
+    return `${fileName}${normalized.search}${normalized.hash}`;
+  } catch (error) {
+    return DEFAULT_BACKOFFICE_TARGET;
+  }
+}
+
+function redirectToLogin(message = '', returnToOverride = '') {
   const url = new URL('login.html', window.location.href);
-  url.searchParams.set('returnTo', getReturnToPath());
+  url.searchParams.set('returnTo', sanitizeReturnToPath(returnToOverride || getReturnToPath()));
   if (message) {
     url.searchParams.set('message', message);
   }
@@ -142,6 +168,7 @@ window.sobellaBackofficeAuth = {
   setCredentials,
   clearCredentials,
   getAuthHeader,
+  sanitizeReturnToPath,
   redirectToLogin,
   fetch: backofficeFetch,
 };

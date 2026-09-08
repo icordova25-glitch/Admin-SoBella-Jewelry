@@ -10,9 +10,14 @@
   <body>
     <main class="login-shell">
       <section class="login-card">
-        <p class="eyebrow" style="color: var(--accent)">Private Access</p>
+        <div class="login-brand-lockup">
+          <p class="login-mark">SB</p>
+          <p class="eyebrow login-eyebrow">Private Access</p>
+        </div>
         <h1>Backoffice login</h1>
         <p class="login-copy">Sign in separately to manage products, business details, and order history.</p>
+        <p id="loginDestination" class="login-destination" aria-live="polite"></p>
+        <p id="savedLoginNotice" class="login-saved-notice" hidden></p>
         <form id="loginForm" class="checkout-form">
           <input type="text" id="adminUsername" placeholder="Username" autocomplete="username" required />
           <input type="password" id="adminPassword" placeholder="Password" autocomplete="current-password" required />
@@ -20,6 +25,7 @@
         </form>
         <p id="loginStatus" class="char-count" role="status" aria-live="polite"></p>
         <div class="login-actions">
+          <button type="button" id="useSavedLogin" class="inventory-btn" hidden>Continue with saved login</button>
           <button type="button" id="clearSavedLogin" class="inventory-btn secondary">Clear saved login</button>
           <a href="/" class="text-link">Return to storefront</a>
         </div>

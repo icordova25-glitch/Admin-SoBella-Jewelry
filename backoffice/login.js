@@ -3,12 +3,19 @@ const adminUsername = document.getElementById('adminUsername');
 const adminPassword = document.getElementById('adminPassword');
 const loginStatus = document.getElementById('loginStatus');
 const clearSavedLoginButton = document.getElementById('clearSavedLogin');
+const useSavedLoginButton = document.getElementById('useSavedLogin');
+const savedLoginNotice = document.getElementById('savedLoginNotice');
+const loginDestination = document.getElementById('loginDestination');
 const backofficeAuth = window.sobellaBackofficeAuth;
 const apiBase = window.location.protocol === 'file:' ? 'http://localhost:3001' : window.location.origin;
 
 function getReturnToPath() {
   const url = new URL(window.location.href);
-  return url.searchParams.get('returnTo') || 'admin.html';
+  return backofficeAuth?.sanitizeReturnToPath(url.searchParams.get('returnTo') || 'admin.html') || 'admin.html';
+}
+
+function getDestinationLabel(returnToPath) {
+  return returnToPath === 'orders.html' ? 'Order history' : 'Admin inventory';
 }
 
 function setLoginStatus(message, isError = false) {
@@ -27,6 +34,15 @@ function populateSavedCredentials() {
   if (credentials?.password && adminPassword) {
     adminPassword.value = credentials.password;
   }
+
+  if (savedLoginNotice) {
+    savedLoginNotice.hidden = !credentials?.username;
+    savedLoginNotice.textContent = credentials?.username ? `Saved sign-in found for ${credentials.username}.` : '';
+  }
+
+  if (useSavedLoginButton) {
+    useSavedLoginButton.hidden = !credentials?.username || !credentials?.password;
+  }
 }
 
 async function verifyCredentials() {
@@ -34,6 +50,24 @@ async function verifyCredentials() {
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
     throw new Error(body.error || 'Unable to sign in.');
+  }
+}
+
+async function continueWithSavedCredentials() {
+  const credentials = backofficeAuth?.getCredentials();
+  if (!credentials?.username || !credentials?.password) {
+    setLoginStatus('No saved login is available.', true);
+    return;
+  }
+
+  setLoginStatus('Checking saved login...');
+  try {
+    await verifyCredentials();
+    window.location.href = getReturnToPath();
+  } catch (error) {
+    backofficeAuth.clearCredentials();
+    populateSavedCredentials();
+    setLoginStatus(error.message || 'Saved login is no longer valid.', true);
   }
 }
 
@@ -70,10 +104,21 @@ if (clearSavedLoginButton) {
       adminPassword.value = '';
     }
     setLoginStatus('Saved login removed.');
+    populateSavedCredentials();
+  });
+}
+
+if (useSavedLoginButton) {
+  useSavedLoginButton.addEventListener('click', () => {
+    continueWithSavedCredentials();
   });
 }
 
 populateSavedCredentials();
+
+if (loginDestination) {
+  loginDestination.textContent = `Next destination: ${getDestinationLabel(getReturnToPath())}`;
+}
 
 const pageUrl = new URL(window.location.href);
 const message = pageUrl.searchParams.get('message');
