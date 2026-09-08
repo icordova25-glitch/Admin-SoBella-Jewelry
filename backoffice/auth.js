@@ -106,6 +106,23 @@ function getAuthHeader() {
   return toBasicAuthToken(credentials.username, credentials.password);
 }
 
+function getReturnToPath() {
+  const fileName = window.location.pathname.split('/').pop() || 'admin.html';
+  if (fileName === 'login.html') {
+    return 'admin.html';
+  }
+  return `${fileName}${window.location.search || ''}${window.location.hash || ''}`;
+}
+
+function redirectToLogin(message = '') {
+  const url = new URL('login.html', window.location.href);
+  url.searchParams.set('returnTo', getReturnToPath());
+  if (message) {
+    url.searchParams.set('message', message);
+  }
+  window.location.href = url.toString();
+}
+
 async function backofficeFetch(url, options = {}) {
   const headers = new Headers(options.headers || {});
   const authHeader = getAuthHeader();
@@ -125,6 +142,7 @@ window.sobellaBackofficeAuth = {
   setCredentials,
   clearCredentials,
   getAuthHeader,
+  redirectToLogin,
   fetch: backofficeFetch,
 };
 

@@ -26,6 +26,15 @@ body {
   text-decoration: none;
   font-weight: 600;
 }
+.top-nav-action {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+}
 .hero {
   position: relative;
   min-height: 78vh;
@@ -324,6 +333,47 @@ body.drawer-open .drawer-backdrop {
   max-width: 1100px;
   margin: 0 auto;
 }
+.login-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 2rem;
+}
+.login-card {
+  width: min(100%, 440px);
+  background: linear-gradient(135deg, #fffdfb 0%, #fff4eb 100%);
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  padding: 1.6rem;
+  box-shadow: 0 16px 42px rgba(92, 58, 67, 0.08);
+}
+.login-card h1 {
+  margin: 0 0 0.5rem;
+}
+.login-copy {
+  margin: 0 0 1rem;
+  color: var(--muted);
+  line-height: 1.6;
+}
+.login-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+.login-actions > * {
+  flex: 1;
+}
+.text-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  border-radius: 999px;
+  padding: 0.75rem 1rem;
+  background: #f7ece4;
+  color: var(--text);
+  font-weight: 600;
+}
 .inventory-table {
   width: 100%;
   border-collapse: collapse;
@@ -453,4 +503,16 @@ body.drawer-open .drawer-backdrop {
     transform: translateX(0);
   }
   .drawer-close { display: inline-block; }
+  .top-nav {
+    padding: 1rem 1rem 0;
+  }
+  .page-shell {
+    padding: 1.25rem 1rem 2rem;
+  }
+  .login-shell {
+    padding: 1rem;
+  }
+  .login-actions {
+    flex-direction: column;
+  }
 }

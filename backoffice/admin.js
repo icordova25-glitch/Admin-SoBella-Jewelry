@@ -4,13 +4,8 @@ const bioForm = document.getElementById('bioForm');
 const bioText = document.getElementById('bioText');
 const bioCount = document.getElementById('bioCount');
 const bankForm = document.getElementById('bankForm');
-const loginForm = document.getElementById('loginForm');
-const adminUsername = document.getElementById('adminUsername');
-const adminPassword = document.getElementById('adminPassword');
-const loginStatus = document.getElementById('loginStatus');
+const adminStatus = document.getElementById('adminStatus');
 const logoutButton = document.getElementById('logoutButton');
-const loginSubmitButton = document.getElementById('loginSubmitButton');
-const adminLoginHeading = document.getElementById('adminLoginHeading');
 const imageUploadInput = document.getElementById('imageUpload');
 const removeImageInput = document.getElementById('removeImage');
 const editingSkuInput = document.getElementById('editingSku');
@@ -19,51 +14,30 @@ const cancelEditButton = document.getElementById('cancelEditButton');
 const productRefreshChannel = window.BroadcastChannel ? new BroadcastChannel('sobella-products') : null;
 const apiBase = window.location.protocol === 'file:' ? 'http://localhost:3001' : window.location.origin;
 const backofficeAuth = window.sobellaBackofficeAuth;
-let hasAuthenticatedSession = false;
 
 function apiUrl(path) {
   return `${apiBase}${path}`;
 }
 
 function setLoginStatus(message, isError = false) {
-  if (!loginStatus) {
+  if (!adminStatus) {
     return;
   }
-  loginStatus.textContent = message;
-  loginStatus.style.color = isError ? '#c0392b' : '';
+  adminStatus.textContent = message;
+  adminStatus.style.color = isError ? '#c0392b' : '';
 }
 
-function updateLoginForm() {
+function requireCredentials() {
   const credentials = backofficeAuth?.getCredentials();
-  if (adminUsername) {
-    adminUsername.value = credentials?.username || '';
-  }
-  if (adminPassword) {
-    adminPassword.value = credentials?.password || '';
+  if (!credentials?.username || !credentials?.password) {
+    backofficeAuth?.redirectToLogin('Please sign in to access the backoffice.');
+    return null;
   }
   if (logoutButton) {
-    logoutButton.disabled = !credentials;
+    logoutButton.disabled = false;
   }
-
-  if (hasAuthenticatedSession) {
-    setLoginStatus(credentials ? `Signed in as ${credentials.username}` : 'Signed in.');
-  } else {
-    setLoginStatus(credentials ? `Signed in as ${credentials.username}` : 'Sign in to load and update backoffice data.');
-  }
-
-  const hideLoginFields = Boolean(credentials && hasAuthenticatedSession);
-  if (adminLoginHeading) {
-    adminLoginHeading.style.display = hideLoginFields ? 'none' : '';
-  }
-  if (adminUsername) {
-    adminUsername.style.display = hideLoginFields ? 'none' : '';
-  }
-  if (adminPassword) {
-    adminPassword.style.display = hideLoginFields ? 'none' : '';
-  }
-  if (loginSubmitButton) {
-    loginSubmitButton.style.display = hideLoginFields ? 'none' : '';
-  }
+  setLoginStatus(`Signed in as ${credentials.username}`);
+  return credentials;
 }
 
 async function backofficeRequest(path, options = {}) {
@@ -71,6 +45,10 @@ async function backofficeRequest(path, options = {}) {
     throw new Error('Backoffice auth helper is unavailable.');
   }
   const response = await backofficeAuth.fetch(apiUrl(path), options);
+  if (response.status === 401) {
+    backofficeAuth.redirectToLogin('Your session expired. Please sign in again.');
+    throw new Error('Authentication required');
+  }
   if (!response.ok) {
     const message = await response.text();
     throw new Error(message || `Request failed with status ${response.status}`);
@@ -259,11 +237,7 @@ async function updateStock(sku, action) {
 async function loadBackofficeData() {
   try {
     await Promise.all([loadAdminProducts(), loadBusinessBio(), loadBankInfo()]);
-    hasAuthenticatedSession = true;
-    updateLoginForm();
   } catch (error) {
-    hasAuthenticatedSession = false;
-    updateLoginForm();
     setLoginStatus(error.message || 'Sign in required.', true);
   }
 }
@@ -357,32 +331,13 @@ if (cancelEditButton) {
   });
 }
 
-if (loginForm) {
-  loginForm.addEventListener('submit', (event) => {
-    event.preventDefault();
-    const username = adminUsername?.value.trim();
-    const password = adminPassword?.value.trim();
-    if (!username || !password) {
-      setLoginStatus('Enter a username and password.', true);
-      return;
-    }
-    backofficeAuth.setCredentials(username, password);
-    updateLoginForm();
-    loadBackofficeData();
-  });
-}
-
 if (logoutButton) {
   logoutButton.addEventListener('click', () => {
     backofficeAuth.clearCredentials();
-    hasAuthenticatedSession = false;
-    if (adminPassword) {
-      adminPassword.value = '';
-    }
-    updateLoginForm();
-    adminProducts.innerHTML = '<p>Sign in to view products.</p>';
+    backofficeAuth.redirectToLogin('You have been signed out.');
   });
 }
 
-updateLoginForm();
-loadBackofficeData();
+if (requireCredentials()) {
+  loadBackofficeData();
+}

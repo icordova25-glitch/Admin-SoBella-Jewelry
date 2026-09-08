@@ -11,20 +11,12 @@
     <nav class="top-nav">
       <a href="admin.html">Admin</a>
       <a href="orders.html">Orders</a>
+      <button type="button" id="logoutButton" class="top-nav-action">Sign out</button>
     </nav>
 
     <main class="page-shell">
       <h1>Admin inventory</h1>
-      <section class="admin-section" aria-labelledby="adminLoginHeading">
-        <h2 id="adminLoginHeading">Backoffice login</h2>
-        <form id="loginForm" class="checkout-form">
-          <input type="text" id="adminUsername" placeholder="Username" autocomplete="username" required />
-          <input type="password" id="adminPassword" placeholder="Password" autocomplete="current-password" required />
-          <button type="submit" id="loginSubmitButton">Sign in</button>
-          <button type="button" id="logoutButton" class="inventory-btn secondary">Sign out</button>
-        </form>
-        <p id="loginStatus" class="char-count" role="status" aria-live="polite"></p>
-      </section>
+      <p id="adminStatus" class="char-count" role="status" aria-live="polite"></p>
       <section class="admin-section">
         <h2>Business bio</h2>
         <form id="bioForm" class="checkout-form">

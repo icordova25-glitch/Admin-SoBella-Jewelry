@@ -1,14 +1,8 @@
 const ordersList = document.getElementById('ordersList');
-const ordersLoginForm = document.getElementById('ordersLoginForm');
-const ordersUsername = document.getElementById('ordersUsername');
-const ordersPassword = document.getElementById('ordersPassword');
 const ordersLoginStatus = document.getElementById('ordersLoginStatus');
 const ordersLogoutButton = document.getElementById('ordersLogoutButton');
-const ordersLoginSubmitButton = document.getElementById('ordersLoginSubmitButton');
-const ordersLoginHeading = document.getElementById('ordersLoginHeading');
 const apiBase = window.location.protocol === 'file:' ? 'http://localhost:3001' : window.location.origin;
 const backofficeAuth = window.sobellaBackofficeAuth;
-let hasAuthenticatedSession = false;
 
 function apiUrl(path) {
   return `${apiBase}${path}`;
@@ -22,41 +16,25 @@ function setOrdersStatus(message, isError = false) {
   ordersLoginStatus.style.color = isError ? '#c0392b' : '';
 }
 
-function updateOrdersLoginForm() {
+function requireCredentials() {
   const credentials = backofficeAuth?.getCredentials();
-  if (ordersUsername) {
-    ordersUsername.value = credentials?.username || '';
-  }
-  if (ordersPassword) {
-    ordersPassword.value = credentials?.password || '';
+  if (!credentials?.username || !credentials?.password) {
+    backofficeAuth?.redirectToLogin('Please sign in to view order history.');
+    return null;
   }
   if (ordersLogoutButton) {
-    ordersLogoutButton.disabled = !credentials;
+    ordersLogoutButton.disabled = false;
   }
-
-  if (hasAuthenticatedSession) {
-    setOrdersStatus(credentials ? `Signed in as ${credentials.username}` : 'Signed in.');
-  } else {
-    setOrdersStatus(credentials ? `Signed in as ${credentials.username}` : 'Sign in to load order history.');
-  }
-
-  const hideLoginFields = Boolean(credentials && hasAuthenticatedSession);
-  if (ordersLoginHeading) {
-    ordersLoginHeading.style.display = hideLoginFields ? 'none' : '';
-  }
-  if (ordersUsername) {
-    ordersUsername.style.display = hideLoginFields ? 'none' : '';
-  }
-  if (ordersPassword) {
-    ordersPassword.style.display = hideLoginFields ? 'none' : '';
-  }
-  if (ordersLoginSubmitButton) {
-    ordersLoginSubmitButton.style.display = hideLoginFields ? 'none' : '';
-  }
+  setOrdersStatus(`Signed in as ${credentials.username}`);
+  return credentials;
 }
 
 async function backofficeRequest(path, options = {}) {
   const response = await backofficeAuth.fetch(apiUrl(path), options);
+  if (response.status === 401) {
+    backofficeAuth.redirectToLogin('Your session expired. Please sign in again.');
+    throw new Error('Authentication required');
+  }
   if (!response.ok) {
     const message = await response.text();
     throw new Error(message || `Request failed with status ${response.status}`);
@@ -94,44 +72,21 @@ async function loadOrders() {
 async function loadOrdersWithAuthState() {
   try {
     await loadOrders();
-    hasAuthenticatedSession = true;
-    updateOrdersLoginForm();
   } catch (error) {
-    hasAuthenticatedSession = false;
-    updateOrdersLoginForm();
     throw error;
   }
-}
-
-if (ordersLoginForm) {
-  ordersLoginForm.addEventListener('submit', (event) => {
-    event.preventDefault();
-    const username = ordersUsername?.value.trim();
-    const password = ordersPassword?.value.trim();
-    if (!username || !password) {
-      setOrdersStatus('Enter a username and password.', true);
-      return;
-    }
-    backofficeAuth.setCredentials(username, password);
-    updateOrdersLoginForm();
-    loadOrdersWithAuthState().catch((error) => setOrdersStatus(error.message, true));
-  });
 }
 
 if (ordersLogoutButton) {
   ordersLogoutButton.addEventListener('click', () => {
     backofficeAuth.clearCredentials();
-    hasAuthenticatedSession = false;
-    if (ordersPassword) {
-      ordersPassword.value = '';
-    }
-    updateOrdersLoginForm();
-    ordersList.innerHTML = '<p>Sign in to load order history.</p>';
+    backofficeAuth.redirectToLogin('You have been signed out.');
   });
 }
 
-updateOrdersLoginForm();
-loadOrdersWithAuthState().catch((error) => {
-  setOrdersStatus(error.message, true);
-  ordersList.innerHTML = '<p>Unable to load order history.</p>';
-});
+if (requireCredentials()) {
+  loadOrdersWithAuthState().catch((error) => {
+    setOrdersStatus(error.message, true);
+    ordersList.innerHTML = '<p>Unable to load order history.</p>';
+  });
+}
