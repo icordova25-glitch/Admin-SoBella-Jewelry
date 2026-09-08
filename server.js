@@ -386,6 +386,14 @@ function clearBackofficeSession(res) {
   });
 }
 
+function buildStorefrontRedirect(targetPath = '') {
+  const normalizedPath = String(targetPath || '').trim();
+  if (!normalizedPath) {
+    return storefrontUrl || 'http://localhost:3000';
+  }
+  return `${storefrontUrl || 'http://localhost:3000'}${normalizedPath.startsWith('/') ? normalizedPath : `/${normalizedPath}`}`;
+}
+
 function isBackofficeAuthorized(req) {
   if (readBackofficeSession(req)) {
     return true;
@@ -498,7 +506,20 @@ app.use('/backoffice', (req, res, next) => {
 });
 app.use('/backoffice', express.static(backofficeDir));
 app.use('/uploads', express.static(uploadsDir));
-app.use(express.static(path.join(__dirname, 'public')));
+
+app.use((req, res, next) => {
+  if (req.path === '/' || req.path === '/index.html') {
+    return res.redirect(302, buildStorefrontRedirect());
+  }
+
+  if (req.path === '/review' || req.path === '/review.html') {
+    return res.redirect(302, buildStorefrontRedirect('/cart'));
+  }
+
+  return next();
+});
+
+app.use(express.static(path.join(__dirname, 'public'), { index: false }));
 
 app.get('/api/products', async (req, res) => {
   const products = await readStore(STORAGE_KEYS.products, productsPath, defaultProducts);
@@ -771,11 +792,11 @@ app.get('/orders.html', (req, res) => {
 });
 
 app.get('/storefront', (req, res) => {
-  return res.redirect(302, storefrontUrl || 'http://localhost:3000');
+  return res.redirect(302, buildStorefrontRedirect());
 });
 
 app.get('/review', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'review.html'));
+  return res.redirect(302, buildStorefrontRedirect('/cart'));
 });
 
 app.get('/backoffice/*', (req, res) => {
@@ -786,7 +807,7 @@ app.get('/backoffice/*', (req, res) => {
 });
 
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  return res.redirect(302, buildStorefrontRedirect());
 });
 
 app.listen(port, () => {
