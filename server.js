@@ -509,7 +509,7 @@ app.use('/uploads', express.static(uploadsDir));
 
 app.use((req, res, next) => {
   if (req.path === '/' || req.path === '/index.html') {
-    return res.redirect(302, buildStorefrontRedirect());
+    return res.redirect(302, '/staff-login');
   }
 
   if (req.path === '/review' || req.path === '/review.html') {
@@ -807,7 +807,7 @@ app.get('/backoffice/*', (req, res) => {
 });
 
 app.get('*', (req, res) => {
-  return res.redirect(302, buildStorefrontRedirect());
+  return res.redirect(302, '/staff-login');
 });
 
 app.listen(port, () => {
