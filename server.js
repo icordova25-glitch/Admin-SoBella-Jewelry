@@ -25,7 +25,7 @@ const bankInfoPath = path.join(dataDir, 'bank-info.json');
 const siteAccessPath = path.join(dataDir, 'site-access.json');
 const backofficeUser = String(process.env.BACKOFFICE_USERNAME || 'admin');
 const backofficePass = String(process.env.BACKOFFICE_PASSWORD || 'sobella-admin');
-const storefrontUrl = String(process.env.STOREFRONT_URL || 'http://localhost:3000').trim().replace(/\/$/, '');
+const storefrontUrl = String(process.env.STOREFRONT_URL || 'https://so-bella-jewelry.vercel.app').trim().replace(/\/$/, '');
 const backofficeSessionCookie = 'sobella_backoffice_session';
 const backofficeSessionTtlMs = Number(process.env.BACKOFFICE_SESSION_TTL_MS || 1000 * 60 * 60 * 12);
 const backofficeSessionSecret = String(
@@ -389,9 +389,9 @@ function clearBackofficeSession(res) {
 function buildStorefrontRedirect(targetPath = '') {
   const normalizedPath = String(targetPath || '').trim();
   if (!normalizedPath) {
-    return storefrontUrl || 'http://localhost:3000';
+    return storefrontUrl || 'https://so-bella-jewelry.vercel.app';
   }
-  return `${storefrontUrl || 'http://localhost:3000'}${normalizedPath.startsWith('/') ? normalizedPath : `/${normalizedPath}`}`;
+  return `${storefrontUrl || 'https://so-bella-jewelry.vercel.app'}${normalizedPath.startsWith('/') ? normalizedPath : `/${normalizedPath}`}`;
 }
 
 function isBackofficeAuthorized(req) {
