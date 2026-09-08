@@ -28,7 +28,7 @@ async function canUseApplePay() {
       [{ supportedMethods: 'https://apple.com/apple-pay' }],
       {
         total: {
-          label: 'SoBella Jewelry',
+          label: 'SOBELLA JEWELRY CO.',
           amount: { currency: 'USD', value: '1.00' },
         },
       },
@@ -169,7 +169,7 @@ async function requestApplePayFromIOS(cart) {
       { label: 'Shipping', amount: { currency: 'USD', value: shipping.toFixed(2) } },
     ],
     total: {
-      label: 'SoBella Jewelry',
+      label: 'SOBELLA JEWELRY CO.',
       amount: { currency: 'USD', value: total.toFixed(2) },
     },
   };

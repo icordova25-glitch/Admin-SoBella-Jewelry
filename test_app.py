@@ -171,7 +171,7 @@ class StorefrontTests(unittest.TestCase):
             module.DATA_DIR = temp_dir
             module.BANK_INFO_PATH = os.path.join(temp_dir, 'bank-info.json')
             payload = {
-                'accountHolder': 'SoBella Jewelry',
+                'accountHolder': 'SOBELLA JEWELRY CO.',
                 'bankName': 'Example Bank',
                 'accountNumber': '123456789',
                 'routingNumber': '987654321',

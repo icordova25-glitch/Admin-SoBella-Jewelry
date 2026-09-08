@@ -78,7 +78,7 @@ const defaultProducts = [
 
 const defaultOrders = [];
 const defaultBusinessBio = {
-  bio: 'SoBella Jewelry creates timeless, elegant pieces that celebrate modern love, personal style, and everyday luxury.',
+  bio: 'SOBELLA JEWELRY CO. creates timeless, elegant pieces that celebrate modern love, personal style, and everyday luxury.',
 };
 const defaultBankInfo = {
   accountHolder: '',

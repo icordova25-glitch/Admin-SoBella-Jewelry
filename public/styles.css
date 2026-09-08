@@ -1,18 +1,24 @@
+@import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Cinzel:wght@400;500;600;700&family=Montserrat:wght@400;500;600&display=swap");
+
 :root {
   color-scheme: light;
-  font-family: 'Inter', Arial, sans-serif;
-  --bg: #fff8f4;
-  --card: #ffffff;
-  --text: #2f2235;
-  --muted: #7d6b7c;
-  --accent: #c97d63;
-  --border: #f0e0d8;
+  font-family: "Montserrat", Arial, sans-serif;
+  --bg: #fdf8f1;
+  --card: #fffdf8;
+  --text: #111111;
+  --muted: #5d5346;
+  --accent: #b68d54;
+  --accent-deep: #8f6836;
+  --border: #e3d4bf;
 }
 
 * { box-sizing: border-box; }
 body {
   margin: 0;
-  background: var(--bg);
+  background:
+    radial-gradient(circle at 12% 12%, rgba(255, 255, 255, 0.94) 0%, transparent 28%),
+    radial-gradient(circle at 82% 4%, rgba(224, 197, 156, 0.28) 0%, transparent 32%),
+    linear-gradient(140deg, #fdfaf5 0%, #f4eadb 50%, #fbf8f2 100%);
   color: var(--text);
 }
 .top-nav {
@@ -20,6 +26,9 @@ body {
   gap: 1rem;
   justify-content: flex-end;
   padding: 1rem 2rem 0;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-size: 0.76rem;
 }
 .top-nav a {
   color: var(--text);
@@ -39,12 +48,11 @@ body {
   position: relative;
   min-height: 78vh;
   padding: 0;
-  color: white;
+  color: var(--text);
   background:
-    linear-gradient(135deg, rgba(255, 248, 244, 0.12), rgba(90, 61, 75, 0.26)),
-    radial-gradient(circle at top left, rgba(255, 255, 255, 0.22), transparent 32%),
-    url('/assets/logo/logo-clean.png') center/cover no-repeat;
-  box-shadow: inset 0 -80px 120px rgba(28, 20, 26, 0.16);
+    linear-gradient(135deg, rgba(255, 252, 247, 0.52), rgba(244, 234, 219, 0.42)),
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.5), transparent 32%);
+  box-shadow: inset 0 -80px 120px rgba(28, 20, 26, 0.08);
 }
 .hero-content {
   position: relative;
@@ -53,14 +61,39 @@ body {
   min-height: 78vh;
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
   padding: 3rem 2rem;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.hero-logo {
+  display: block;
+  width: min(100%, 420px);
+  height: auto;
+  max-height: 420px;
+  object-fit: contain;
+  margin: 0 auto;
+  opacity: 0.92;
+  mix-blend-mode: multiply;
 }
 .bio-section {
   padding: 0 2rem 2.25rem;
 }
 .bio-card {
-  background: linear-gradient(135deg, #fffdfb 0%, #fff4eb 100%);
+  background: linear-gradient(135deg, #fffdfb 0%, #fff6ed 100%);
   border: 1px solid var(--border);
   border-radius: 24px;
   padding: 1.5rem 1.75rem;
@@ -82,6 +115,8 @@ body {
   font-size: 1.35rem;
   letter-spacing: 0.02em;
   color: var(--text);
+  font-family: "Cinzel", "Cormorant Garamond", Georgia, serif;
+  text-transform: uppercase;
 }
 .bio-card p {
   margin: 0;
@@ -188,7 +223,7 @@ body.drawer-open .drawer-backdrop {
   border-radius: 999px;
   padding: 0.7rem 0.9rem;
   text-align: left;
-  background: #f7ece4;
+  background: #f8f1e7;
   color: var(--text);
   cursor: pointer;
 }
@@ -227,22 +262,25 @@ body.drawer-open .drawer-backdrop {
 .eyebrow {
   margin: 0 0 0.5rem;
   text-transform: uppercase;
-  letter-spacing: 0.24em;
+  letter-spacing: 0.28em;
   font-size: 0.8rem;
   font-weight: 700;
-  color: rgba(255,255,255,0.9);
+  color: var(--accent-deep);
 }
 .hero-subtext {
   max-width: 34rem;
   margin: 0.5rem 0 0;
   font-size: 1.05rem;
   line-height: 1.65;
-  color: rgba(255,255,255,0.94);
+  color: var(--text);
 }
 .hero-content h1 {
   margin: 0;
   font-size: clamp(2rem, 4vw, 3.2rem);
   line-height: 1.1;
+  font-family: "Cinzel", "Cormorant Garamond", Georgia, serif;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
 }
 .product-actions {
   display: flex;
@@ -341,7 +379,7 @@ body.drawer-open .drawer-backdrop {
 }
 .login-card {
   width: min(100%, 440px);
-  background: linear-gradient(135deg, #fffdfb 0%, #fff4eb 100%);
+  background: linear-gradient(135deg, #fffdfb 0%, #fff6ed 100%);
   border: 1px solid var(--border);
   border-radius: 24px;
   padding: 1.6rem;
@@ -352,20 +390,25 @@ body.drawer-open .drawer-backdrop {
 }
 .login-brand-lockup {
   display: grid;
-  justify-items: start;
+  justify-items: center;
+  text-align: center;
   gap: 0.35rem;
   margin-bottom: 0.8rem;
 }
-.login-mark {
-  margin: 0;
-  font-size: 3rem;
-  line-height: 1;
-  color: #a77546;
-  font-family: 'Georgia', 'Times New Roman', serif;
+.login-logo {
+  display: block;
+  width: min(100%, 220px);
+  height: auto;
+  max-height: 160px;
+  object-fit: contain;
+  opacity: 0.92;
+  mix-blend-mode: multiply;
 }
 .login-eyebrow {
   margin-bottom: 0;
   color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
 }
 .login-copy {
   margin: 0 0 1rem;
@@ -396,7 +439,7 @@ body.drawer-open .drawer-backdrop {
   text-decoration: none;
   border-radius: 999px;
   padding: 0.75rem 1rem;
-  background: #f7ece4;
+  background: #f8f1e7;
   color: var(--text);
   font-weight: 600;
 }
@@ -538,6 +581,17 @@ body.drawer-open .drawer-backdrop {
   .login-shell {
     padding: 1rem;
   }
+
+  .hero-logo {
+    width: min(100%, 360px);
+    max-height: 360px;
+  }
+
+  .login-logo {
+    width: min(100%, 190px);
+    max-height: 140px;
+  }
+
   .login-actions {
     flex-direction: column;
   }

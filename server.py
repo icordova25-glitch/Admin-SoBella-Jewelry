@@ -104,7 +104,7 @@ def ensure_data_files():
         write_json(orders_path, [])
 
     if not bio_path.exists():
-        write_json(bio_path, {'bio': 'SoBella Jewelry creates timeless, elegant pieces that celebrate modern love, personal style, and everyday luxury.'})
+        write_json(bio_path, {'bio': 'SOBELLA JEWELRY CO. creates timeless, elegant pieces that celebrate modern love, personal style, and everyday luxury.'})
 
     if not bank_info_path.exists():
         write_json(bank_info_path, {
@@ -371,7 +371,7 @@ def send_order_confirmation(order):
     smtp_from = os.getenv('SMTP_FROM', 'no-reply@sobella.com')
 
     message = EmailMessage()
-    message['Subject'] = f"Your SoBella Jewelry order {order['id']} is confirmed"
+    message['Subject'] = f"Your SOBELLA JEWELRY CO. order {order['id']} is confirmed"
     message['From'] = smtp_from
     message['To'] = order['email']
     message.set_content(
