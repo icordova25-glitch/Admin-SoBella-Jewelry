@@ -14,17 +14,17 @@ function getCredentials() {
       return null;
     }
     const parsed = JSON.parse(raw);
-    if (!parsed.username || !parsed.password) {
+    if (!parsed.username) {
       return null;
     }
-    return parsed;
+    return { username: String(parsed.username) };
   } catch (error) {
     return null;
   }
 }
 
-function setCredentials(username, password) {
-  localStorage.setItem(BACKOFFICE_AUTH_KEY, JSON.stringify({ username, password }));
+function setCredentials(username) {
+  localStorage.setItem(BACKOFFICE_AUTH_KEY, JSON.stringify({ username: String(username || '').trim() }));
 }
 
 function clearCredentials() {
@@ -86,7 +86,7 @@ function hydrateCredentialsFromUrl() {
       return;
     }
 
-    setCredentials(credentials.username, credentials.password);
+    setCredentials(credentials.username);
 
     const initialHref = url.href;
     url.username = '';
@@ -102,11 +102,7 @@ function hydrateCredentialsFromUrl() {
 }
 
 function getAuthHeader() {
-  const credentials = getCredentials();
-  if (!credentials) {
-    return '';
-  }
-  return toBasicAuthToken(credentials.username, credentials.password);
+  return '';
 }
 
 function getReturnToPath() {

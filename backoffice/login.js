@@ -3,7 +3,6 @@ const adminUsername = document.getElementById('adminUsername');
 const adminPassword = document.getElementById('adminPassword');
 const loginStatus = document.getElementById('loginStatus');
 const clearSavedLoginButton = document.getElementById('clearSavedLogin');
-const useSavedLoginButton = document.getElementById('useSavedLogin');
 const savedLoginNotice = document.getElementById('savedLoginNotice');
 const loginDestination = document.getElementById('loginDestination');
 const backofficeAuth = window.sobellaBackofficeAuth;
@@ -31,17 +30,10 @@ function populateSavedCredentials() {
   if (credentials?.username && adminUsername) {
     adminUsername.value = credentials.username;
   }
-  if (credentials?.password && adminPassword) {
-    adminPassword.value = credentials.password;
-  }
 
   if (savedLoginNotice) {
     savedLoginNotice.hidden = !credentials?.username;
-    savedLoginNotice.textContent = credentials?.username ? `Saved sign-in found for ${credentials.username}.` : '';
-  }
-
-  if (useSavedLoginButton) {
-    useSavedLoginButton.hidden = !credentials?.username || !credentials?.password;
+    savedLoginNotice.textContent = credentials?.username ? `Last signed in as ${credentials.username}.` : '';
   }
 }
 
@@ -61,30 +53,6 @@ async function verifyCredentials() {
   return response.json().catch(() => ({}));
 }
 
-async function continueWithSavedCredentials() {
-  const credentials = backofficeAuth?.getCredentials();
-  if (!credentials?.username || !credentials?.password) {
-    setLoginStatus('No saved login is available.', true);
-    return;
-  }
-
-  setLoginStatus('Checking saved login...');
-  try {
-    if (adminUsername) {
-      adminUsername.value = credentials.username;
-    }
-    if (adminPassword) {
-      adminPassword.value = credentials.password;
-    }
-    await verifyCredentials();
-    window.location.href = getReturnToPath();
-  } catch (error) {
-    backofficeAuth.clearCredentials();
-    populateSavedCredentials();
-    setLoginStatus(error.message || 'Saved login is no longer valid.', true);
-  }
-}
-
 if (loginForm) {
   loginForm.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -95,14 +63,15 @@ if (loginForm) {
       return;
     }
 
-    backofficeAuth.setCredentials(username, password);
     setLoginStatus('Signing in...');
 
     try {
       await verifyCredentials();
+      backofficeAuth.setCredentials(username);
       window.location.href = getReturnToPath();
     } catch (error) {
       backofficeAuth.clearCredentials();
+      populateSavedCredentials();
       setLoginStatus(error.message || 'Unable to sign in.', true);
     }
   });
@@ -120,12 +89,6 @@ if (clearSavedLoginButton) {
     }
     setLoginStatus('Saved login removed.');
     populateSavedCredentials();
-  });
-}
-
-if (useSavedLoginButton) {
-  useSavedLoginButton.addEventListener('click', () => {
-    continueWithSavedCredentials();
   });
 }
 
