@@ -25,6 +25,12 @@ const bankInfoPath = path.join(dataDir, 'bank-info.json');
 const siteAccessPath = path.join(dataDir, 'site-access.json');
 const backofficeUser = String(process.env.BACKOFFICE_USERNAME || 'admin');
 const backofficePass = String(process.env.BACKOFFICE_PASSWORD || 'sobella-admin');
+const backofficeSessionCookie = 'sobella_backoffice_session';
+const backofficeSessionTtlMs = Number(process.env.BACKOFFICE_SESSION_TTL_MS || 1000 * 60 * 60 * 12);
+const backofficeSessionSecret = String(
+  process.env.BACKOFFICE_SESSION_SECRET ||
+  crypto.createHash('sha256').update(`${backofficeUser}:${backofficePass}:sobella-backoffice`).digest('hex'),
+);
 
 const STORAGE_KEYS = {
   products: 'sobella:products',
@@ -282,7 +288,107 @@ function parseBasicAuthHeader(authHeader) {
   }
 }
 
+function parseCookies(cookieHeader) {
+  return String(cookieHeader || '')
+    .split(';')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .reduce((cookies, part) => {
+      const separatorIndex = part.indexOf('=');
+      if (separatorIndex <= 0) {
+        return cookies;
+      }
+      const key = part.slice(0, separatorIndex).trim();
+      const value = decodeURIComponent(part.slice(separatorIndex + 1).trim());
+      cookies[key] = value;
+      return cookies;
+    }, {});
+}
+
+function signBackofficeSessionPayload(payload) {
+  return crypto.createHmac('sha256', backofficeSessionSecret).update(payload).digest('hex');
+}
+
+function createBackofficeSessionValue(username) {
+  const expiresAt = Date.now() + backofficeSessionTtlMs;
+  const payload = `${username}:${expiresAt}`;
+  const encodedPayload = Buffer.from(payload, 'utf8').toString('base64url');
+  return `${encodedPayload}.${signBackofficeSessionPayload(payload)}`;
+}
+
+function readBackofficeSession(req) {
+  const cookies = parseCookies(req.headers.cookie || '');
+  const rawValue = cookies[backofficeSessionCookie];
+  if (!rawValue || !rawValue.includes('.')) {
+    return null;
+  }
+
+  const separatorIndex = rawValue.lastIndexOf('.');
+  const encodedPayload = rawValue.slice(0, separatorIndex);
+  const signature = rawValue.slice(separatorIndex + 1);
+
+  try {
+    const payload = Buffer.from(encodedPayload, 'base64url').toString('utf8');
+    const expectedSignature = signBackofficeSessionPayload(payload);
+    const provided = Buffer.from(signature, 'utf8');
+    const expected = Buffer.from(expectedSignature, 'utf8');
+    if (provided.length !== expected.length || !crypto.timingSafeEqual(provided, expected)) {
+      return null;
+    }
+
+    const separator = payload.lastIndexOf(':');
+    if (separator <= 0) {
+      return null;
+    }
+
+    const username = payload.slice(0, separator);
+    const expiresAt = Number(payload.slice(separator + 1));
+    if (username !== backofficeUser || !Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+      return null;
+    }
+
+    return { username, expiresAt };
+  } catch (error) {
+    return null;
+  }
+}
+
+function getBackofficeReturnTo(req) {
+  const fileName = req.path.includes('orders') ? 'orders.html' : 'admin.html';
+  return fileName;
+}
+
+function redirectToBackofficeLogin(req, res, message) {
+  const params = new URLSearchParams({ returnTo: getBackofficeReturnTo(req) });
+  if (message) {
+    params.set('message', message);
+  }
+  return res.redirect(302, `/staff-login?${params.toString()}`);
+}
+
+function setBackofficeSession(res, username) {
+  res.cookie(backofficeSessionCookie, createBackofficeSessionValue(username), {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    path: '/',
+    maxAge: backofficeSessionTtlMs,
+  });
+}
+
+function clearBackofficeSession(res) {
+  res.clearCookie(backofficeSessionCookie, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    path: '/',
+  });
+}
+
 function isBackofficeAuthorized(req) {
+  if (readBackofficeSession(req)) {
+    return true;
+  }
   const credentials = parseBasicAuthHeader(req.headers.authorization || '');
   if (!credentials) {
     return false;
@@ -380,6 +486,13 @@ app.get('/api/owner/site-access/:action', async (req, res) => {
 
 app.use('/backoffice', (req, res, next) => {
   res.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
+  if (req.path === '/login.html') {
+    const suffix = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
+    return res.redirect(302, `/staff-login${suffix}`);
+  }
+  if (req.path.endsWith('.html') && req.path !== '/login.html' && !readBackofficeSession(req)) {
+    return redirectToBackofficeLogin(req, res, 'Please sign in to access the backoffice.');
+  }
   next();
 });
 app.use('/backoffice', express.static(backofficeDir));
@@ -389,6 +502,31 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.get('/api/products', async (req, res) => {
   const products = await readStore(STORAGE_KEYS.products, productsPath, defaultProducts);
   res.json(products);
+});
+
+app.get('/api/backoffice/session', (req, res) => {
+  const session = readBackofficeSession(req);
+  if (!session) {
+    return res.json({ authenticated: false });
+  }
+  return res.json({ authenticated: true, username: session.username, expiresAt: session.expiresAt });
+});
+
+app.post('/api/backoffice/session', (req, res) => {
+  const username = String(req.body?.username || '').trim();
+  const password = String(req.body?.password || '').trim();
+  if (username !== backofficeUser || password !== backofficePass) {
+    clearBackofficeSession(res);
+    return res.status(401).json({ error: 'Invalid username or password.' });
+  }
+
+  setBackofficeSession(res, username);
+  return res.json({ success: true, username });
+});
+
+app.delete('/api/backoffice/session', (req, res) => {
+  clearBackofficeSession(res);
+  return res.json({ success: true });
 });
 
 app.get('/api/health/storage', (req, res) => {
@@ -581,11 +719,18 @@ app.put('/api/admin/products/:sku', requireBackofficeAuth, async (req, res) => {
 });
 
 app.get('/backoffice', (req, res) => {
-  res.redirect(302, '/backoffice/login.html');
+  if (readBackofficeSession(req)) {
+    return res.redirect(302, '/backoffice/admin.html');
+  }
+  return res.redirect(302, '/staff-login');
 });
 
 app.get('/backoffice/login', (req, res) => {
-  res.redirect(302, '/backoffice/login.html');
+  res.redirect(302, '/staff-login');
+});
+
+app.get('/staff-login', (req, res) => {
+  res.sendFile(path.join(backofficeDir, 'login.html'));
 });
 
 app.get('/backoffice/admin', (req, res) => {
@@ -597,23 +742,31 @@ app.get('/backoffice/orders', (req, res) => {
 });
 
 app.get('/admin', (req, res) => {
-  res.redirect(302, '/backoffice/login.html?returnTo=admin.html');
+  if (readBackofficeSession(req)) {
+    return res.redirect(302, '/backoffice/admin.html');
+  }
+  return res.redirect(302, '/staff-login?returnTo=admin.html');
 });
 
 app.get('/admin.html', (req, res) => {
-  res.redirect(302, '/backoffice/login.html?returnTo=admin.html');
+  if (readBackofficeSession(req)) {
+    return res.redirect(302, '/backoffice/admin.html');
+  }
+  return res.redirect(302, '/staff-login?returnTo=admin.html');
 });
 
 app.get('/orders', (req, res) => {
-  res.redirect(302, '/backoffice/login.html?returnTo=orders.html');
+  if (readBackofficeSession(req)) {
+    return res.redirect(302, '/backoffice/orders.html');
+  }
+  return res.redirect(302, '/staff-login?returnTo=orders.html');
 });
 
 app.get('/orders.html', (req, res) => {
-  res.redirect(302, '/backoffice/login.html?returnTo=orders.html');
-});
-
-app.get('/staff-login', (req, res) => {
-  res.redirect(302, '/backoffice/login.html');
+  if (readBackofficeSession(req)) {
+    return res.redirect(302, '/backoffice/orders.html');
+  }
+  return res.redirect(302, '/staff-login?returnTo=orders.html');
 });
 
 app.get('/review', (req, res) => {
@@ -621,7 +774,10 @@ app.get('/review', (req, res) => {
 });
 
 app.get('/backoffice/*', (req, res) => {
-  res.redirect(302, '/backoffice/login.html');
+  if (readBackofficeSession(req)) {
+    return res.redirect(302, '/backoffice/admin.html');
+  }
+  return res.redirect(302, '/staff-login');
 });
 
 app.get('*', (req, res) => {

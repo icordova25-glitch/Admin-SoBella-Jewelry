@@ -141,7 +141,7 @@ function sanitizeReturnToPath(input) {
 }
 
 function redirectToLogin(message = '', returnToOverride = '') {
-  const url = new URL('login.html', window.location.href);
+  const url = new URL('/staff-login', window.location.origin);
   url.searchParams.set('returnTo', sanitizeReturnToPath(returnToOverride || getReturnToPath()));
   if (message) {
     url.searchParams.set('message', message);

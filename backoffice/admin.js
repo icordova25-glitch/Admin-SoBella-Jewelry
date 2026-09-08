@@ -28,16 +28,19 @@ function setLoginStatus(message, isError = false) {
 }
 
 function requireCredentials() {
-  const credentials = backofficeAuth?.getCredentials();
-  if (!credentials?.username || !credentials?.password) {
-    backofficeAuth?.redirectToLogin('Please sign in to access the backoffice.');
-    return null;
-  }
-  if (logoutButton) {
-    logoutButton.disabled = false;
-  }
-  setLoginStatus(`Signed in as ${credentials.username}`);
-  return credentials;
+  return fetch(`${apiBase}/api/backoffice/session`, { credentials: 'same-origin' })
+    .then((response) => response.json())
+    .then((session) => {
+      if (!session?.authenticated) {
+        backofficeAuth?.redirectToLogin('Please sign in to access the backoffice.');
+        return null;
+      }
+      if (logoutButton) {
+        logoutButton.disabled = false;
+      }
+      setLoginStatus(`Signed in as ${session.username}`);
+      return session;
+    });
 }
 
 async function backofficeRequest(path, options = {}) {
@@ -334,10 +337,15 @@ if (cancelEditButton) {
 if (logoutButton) {
   logoutButton.addEventListener('click', () => {
     backofficeAuth.clearCredentials();
-    backofficeAuth.redirectToLogin('You have been signed out.');
+    fetch(`${apiBase}/api/backoffice/session`, { method: 'DELETE', credentials: 'same-origin' })
+      .finally(() => {
+        backofficeAuth.redirectToLogin('You have been signed out.');
+      });
   });
 }
 
-if (requireCredentials()) {
-  loadBackofficeData();
-}
+requireCredentials().then((session) => {
+  if (session) {
+    loadBackofficeData();
+  }
+});

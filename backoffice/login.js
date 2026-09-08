@@ -46,11 +46,19 @@ function populateSavedCredentials() {
 }
 
 async function verifyCredentials() {
-  const response = await backofficeAuth.fetch(`${apiBase}/api/admin/products`);
+  const username = adminUsername?.value.trim();
+  const password = adminPassword?.value.trim();
+  const response = await fetch(`${apiBase}/api/backoffice/session`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+    credentials: 'same-origin',
+  });
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
     throw new Error(body.error || 'Unable to sign in.');
   }
+  return response.json().catch(() => ({}));
 }
 
 async function continueWithSavedCredentials() {
@@ -62,6 +70,12 @@ async function continueWithSavedCredentials() {
 
   setLoginStatus('Checking saved login...');
   try {
+    if (adminUsername) {
+      adminUsername.value = credentials.username;
+    }
+    if (adminPassword) {
+      adminPassword.value = credentials.password;
+    }
     await verifyCredentials();
     window.location.href = getReturnToPath();
   } catch (error) {
@@ -97,6 +111,7 @@ if (loginForm) {
 if (clearSavedLoginButton) {
   clearSavedLoginButton.addEventListener('click', () => {
     backofficeAuth.clearCredentials();
+    fetch(`${apiBase}/api/backoffice/session`, { method: 'DELETE', credentials: 'same-origin' }).catch(() => {});
     if (adminUsername) {
       adminUsername.value = '';
     }
@@ -125,3 +140,12 @@ const message = pageUrl.searchParams.get('message');
 if (message) {
   setLoginStatus(message);
 }
+
+fetch(`${apiBase}/api/backoffice/session`, { credentials: 'same-origin' })
+  .then((response) => response.json())
+  .then((session) => {
+    if (session?.authenticated) {
+      window.location.href = getReturnToPath();
+    }
+  })
+  .catch(() => {});

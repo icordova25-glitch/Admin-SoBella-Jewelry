@@ -17,16 +17,19 @@ function setOrdersStatus(message, isError = false) {
 }
 
 function requireCredentials() {
-  const credentials = backofficeAuth?.getCredentials();
-  if (!credentials?.username || !credentials?.password) {
-    backofficeAuth?.redirectToLogin('Please sign in to view order history.');
-    return null;
-  }
-  if (ordersLogoutButton) {
-    ordersLogoutButton.disabled = false;
-  }
-  setOrdersStatus(`Signed in as ${credentials.username}`);
-  return credentials;
+  return fetch(`${apiBase}/api/backoffice/session`, { credentials: 'same-origin' })
+    .then((response) => response.json())
+    .then((session) => {
+      if (!session?.authenticated) {
+        backofficeAuth?.redirectToLogin('Please sign in to view order history.');
+        return null;
+      }
+      if (ordersLogoutButton) {
+        ordersLogoutButton.disabled = false;
+      }
+      setOrdersStatus(`Signed in as ${session.username}`);
+      return session;
+    });
 }
 
 async function backofficeRequest(path, options = {}) {
@@ -80,13 +83,19 @@ async function loadOrdersWithAuthState() {
 if (ordersLogoutButton) {
   ordersLogoutButton.addEventListener('click', () => {
     backofficeAuth.clearCredentials();
-    backofficeAuth.redirectToLogin('You have been signed out.');
+    fetch(`${apiBase}/api/backoffice/session`, { method: 'DELETE', credentials: 'same-origin' })
+      .finally(() => {
+        backofficeAuth.redirectToLogin('You have been signed out.');
+      });
   });
 }
 
-if (requireCredentials()) {
+requireCredentials().then((session) => {
+  if (!session) {
+    return;
+  }
   loadOrdersWithAuthState().catch((error) => {
     setOrdersStatus(error.message, true);
     ordersList.innerHTML = '<p>Unable to load order history.</p>';
   });
-}
+});
