@@ -12,6 +12,7 @@ const editingSkuInput = document.getElementById('editingSku');
 const productSubmitButton = document.getElementById('productSubmitButton');
 const cancelEditButton = document.getElementById('cancelEditButton');
 const adminImageGallery = document.getElementById('adminImageGallery');
+const heroSlidesAdmin = document.getElementById('heroSlidesAdmin');
 const productRefreshChannel = window.BroadcastChannel ? new BroadcastChannel('sobella-products') : null;
 const apiBase = window.location.protocol === 'file:' ? 'http://localhost:3001' : window.location.origin;
 const backofficeAuth = window.sobellaBackofficeAuth;
@@ -121,6 +122,107 @@ async function loadBusinessBio() {
       bioCount.textContent = `${(data.bio || '').length} / 500`;
     }
   }
+}
+
+async function updateHeroSlide(slideId, payload) {
+  const response = await backofficeRequest(`/api/admin/hero-slides/${encodeURIComponent(slideId)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return response.json();
+}
+
+async function loadHeroSlides() {
+  if (!heroSlidesAdmin) {
+    return;
+  }
+
+  const response = await backofficeRequest('/api/admin/hero-slides');
+  const slides = await response.json();
+  renderHeroSlidesAdmin(slides);
+}
+
+function renderHeroSlidesAdmin(slides) {
+  if (!heroSlidesAdmin) {
+    return;
+  }
+
+  heroSlidesAdmin.innerHTML = '';
+
+  slides.forEach((slide, index) => {
+    const card = document.createElement('article');
+    card.className = 'admin-slide-card';
+    const isLogoSlot = index === 0;
+    card.innerHTML = `
+      <img class="admin-slide-image" src="${slide.image}" alt="${slide.alt}" />
+      <div class="admin-slide-meta">
+        <h3>Slide ${index + 1}${isLogoSlot ? ' · Logo default slot' : ''}</h3>
+        <p>${slide.alt}</p>
+      </div>
+      <label class="inventory-btn secondary admin-slide-upload">
+        <span>${isLogoSlot ? 'Replace logo slide' : 'Upload replacement'}</span>
+        <input type="file" accept="image/*" hidden />
+      </label>
+      <button type="button" class="inventory-btn secondary" data-action="preview">View</button>
+      <button type="button" class="inventory-btn" data-action="reset">Restore default</button>
+    `;
+
+    const fileInput = card.querySelector('input[type="file"]');
+    const previewButton = card.querySelector('[data-action="preview"]');
+    const resetButton = card.querySelector('[data-action="reset"]');
+
+    if (previewButton) {
+      previewButton.addEventListener('click', () => showImagePreview(slide.image));
+    }
+
+    if (resetButton) {
+      resetButton.addEventListener('click', async () => {
+        try {
+          await updateHeroSlide(slide.id, { removeImage: true });
+          setLoginStatus(`Restored default image for slide ${index + 1}.`);
+          loadHeroSlides();
+        } catch (error) {
+          setLoginStatus(error.message, true);
+        }
+      });
+    }
+
+    if (fileInput) {
+      fileInput.addEventListener('change', async () => {
+        const imageFile = fileInput.files?.[0];
+        if (!imageFile) {
+          return;
+        }
+
+        const maxUploadBytes = maxUploadMb * 1024 * 1024;
+        if (imageFile.size > maxUploadBytes) {
+          setLoginStatus(`Image too large. Please upload a file up to ${maxUploadMb}MB.`, true);
+          fileInput.value = '';
+          return;
+        }
+
+        try {
+          const dataUrl = await readFileAsDataUrl(imageFile);
+          await updateHeroSlide(slide.id, {
+            imageFile: {
+              filename: imageFile.name,
+              content: dataUrl.split(',')[1] || '',
+            },
+            alt: slide.alt,
+          });
+          setLoginStatus(`Updated hero slide ${index + 1}.`);
+          loadHeroSlides();
+        } catch (error) {
+          setLoginStatus(error.message, true);
+        } finally {
+          fileInput.value = '';
+        }
+      });
+    }
+
+    heroSlidesAdmin.appendChild(card);
+  });
 }
 
 async function loadBankInfo() {
@@ -291,7 +393,7 @@ async function updateStock(sku, action) {
 
 async function loadBackofficeData() {
   try {
-    await Promise.all([loadAdminProducts(), loadBusinessBio(), loadBankInfo()]);
+    await Promise.all([loadAdminProducts(), loadBusinessBio(), loadBankInfo(), loadHeroSlides()]);
   } catch (error) {
     setLoginStatus(error.message || 'Sign in required.', true);
   }

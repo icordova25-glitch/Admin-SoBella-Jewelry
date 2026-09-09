@@ -22,6 +22,7 @@ const ordersPath = path.join(dataDir, 'orders.json');
 const backofficeDir = path.join(__dirname, 'backoffice');
 const businessBioPath = path.join(dataDir, 'business-bio.json');
 const bankInfoPath = path.join(dataDir, 'bank-info.json');
+const heroSlidesPath = path.join(dataDir, 'hero-slides.json');
 const siteAccessPath = path.join(dataDir, 'site-access.json');
 const backofficeUser = String(process.env.BACKOFFICE_USERNAME || 'admin');
 const backofficePass = String(process.env.BACKOFFICE_PASSWORD || 'sobella-admin');
@@ -38,6 +39,7 @@ const STORAGE_KEYS = {
   orders: 'sobella:orders',
   businessBio: 'sobella:businessBio',
   bankInfo: 'sobella:bankInfo',
+  heroSlides: 'sobella:heroSlides',
   siteAccess: 'sobella:siteAccess',
 };
 
@@ -86,6 +88,38 @@ const defaultBankInfo = {
   accountNumber: '',
   routingNumber: '',
 };
+const defaultHeroSlides = [
+  {
+    id: 'slide-1',
+    image: 'https://so-bella-jewelry.vercel.app/assets/logo/sobella-logo.svg',
+    alt: 'SOBELLA JEWELRY CO. logo',
+  },
+  {
+    id: 'slide-2',
+    image: 'https://so-bella-jewelry.vercel.app/assets/placeholders/gallery/gallery-1.svg',
+    alt: 'SOBELLA hero slide 2',
+  },
+  {
+    id: 'slide-3',
+    image: 'https://so-bella-jewelry.vercel.app/assets/placeholders/gallery/gallery-2.svg',
+    alt: 'SOBELLA hero slide 3',
+  },
+  {
+    id: 'slide-4',
+    image: 'https://so-bella-jewelry.vercel.app/assets/placeholders/gallery/gallery-3.svg',
+    alt: 'SOBELLA hero slide 4',
+  },
+  {
+    id: 'slide-5',
+    image: 'https://so-bella-jewelry.vercel.app/assets/placeholders/gallery/gallery-4.svg',
+    alt: 'SOBELLA hero slide 5',
+  },
+  {
+    id: 'slide-6',
+    image: 'https://so-bella-jewelry.vercel.app/assets/placeholders/gallery/gallery-5.svg',
+    alt: 'SOBELLA hero slide 6',
+  },
+];
 const defaultSiteAccess = {
   enabled: true,
   reason: '',
@@ -162,6 +196,19 @@ function removeUploadedImage(imageUrl) {
   if (fs.existsSync(targetPath)) {
     fs.unlinkSync(targetPath);
   }
+}
+
+function normalizeHeroSlides(slides) {
+  const normalized = Array.isArray(slides) ? slides : [];
+  const nextSlides = defaultHeroSlides.map((fallback, index) => {
+    const current = normalized[index] || {};
+    return {
+      id: fallback.id,
+      image: String(current.image || fallback.image || ''),
+      alt: String(current.alt || fallback.alt || `SOBELLA hero slide ${index + 1}`),
+    };
+  });
+  return nextSlides.slice(0, 6);
 }
 
 function hasKvConfigured() {
@@ -626,6 +673,12 @@ app.get('/api/business-bio', async (req, res) => {
   res.json(bio);
 });
 
+app.get('/api/hero-slides', async (req, res) => {
+  const slides = normalizeHeroSlides(await readStore(STORAGE_KEYS.heroSlides, heroSlidesPath, defaultHeroSlides));
+  res.set('Access-Control-Allow-Origin', '*');
+  res.json(slides);
+});
+
 app.post('/api/business-bio', requireBackofficeAuth, async (req, res) => {
   const payload = {
     bio: String(req.body?.bio || '').slice(0, 500),
@@ -648,6 +701,46 @@ app.post('/api/business-bank-info', requireBackofficeAuth, async (req, res) => {
   };
   await writeStore(STORAGE_KEYS.bankInfo, bankInfoPath, payload);
   res.json(payload);
+});
+
+app.get('/api/admin/hero-slides', requireBackofficeAuth, async (req, res) => {
+  const slides = normalizeHeroSlides(await readStore(STORAGE_KEYS.heroSlides, heroSlidesPath, defaultHeroSlides));
+  res.json(slides);
+});
+
+app.put('/api/admin/hero-slides/:id', requireBackofficeAuth, async (req, res) => {
+  const slideId = String(req.params.id || '').trim();
+  const updates = req.body || {};
+  const slides = normalizeHeroSlides(await readStore(STORAGE_KEYS.heroSlides, heroSlidesPath, defaultHeroSlides));
+  const index = slides.findIndex((slide) => slide.id === slideId);
+
+  if (index === -1) {
+    return res.status(404).json({ error: `Slide ${slideId} was not found.` });
+  }
+
+  const slide = slides[index];
+  if (updates.alt !== undefined) {
+    slide.alt = String(updates.alt || '').trim() || slide.alt;
+  }
+
+  if (updates.imageFile) {
+    const newImage = saveUploadedImage(updates.imageFile);
+    if (newImage) {
+      removeUploadedImage(slide.image);
+      slide.image = newImage;
+    }
+  } else if (updates.removeImage) {
+    removeUploadedImage(slide.image);
+    const fallback = defaultHeroSlides[index];
+    slide.image = fallback.image;
+    slide.alt = fallback.alt;
+  } else if (updates.image !== undefined) {
+    slide.image = String(updates.image || '').trim() || slide.image;
+  }
+
+  slides[index] = slide;
+  await writeStore(STORAGE_KEYS.heroSlides, heroSlidesPath, slides);
+  res.json({ success: true, slide });
 });
 
 app.get('/api/admin/products', requireBackofficeAuth, async (req, res) => {
