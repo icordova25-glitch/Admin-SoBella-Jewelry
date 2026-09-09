@@ -11,9 +11,11 @@ const removeImageInput = document.getElementById('removeImage');
 const editingSkuInput = document.getElementById('editingSku');
 const productSubmitButton = document.getElementById('productSubmitButton');
 const cancelEditButton = document.getElementById('cancelEditButton');
+const adminImageGallery = document.getElementById('adminImageGallery');
 const productRefreshChannel = window.BroadcastChannel ? new BroadcastChannel('sobella-products') : null;
 const apiBase = window.location.protocol === 'file:' ? 'http://localhost:3001' : window.location.origin;
 const backofficeAuth = window.sobellaBackofficeAuth;
+const maxUploadMb = Number(window.SOBELLA_MAX_UPLOAD_MB || 25);
 
 function apiUrl(path) {
   return `${apiBase}${path}`;
@@ -136,6 +138,9 @@ async function loadAdminProducts() {
   const response = await backofficeRequest('/api/admin/products');
   const products = await response.json();
   adminProducts.innerHTML = '';
+  if (adminImageGallery) {
+    adminImageGallery.innerHTML = '';
+  }
 
   if (!products.length) {
     adminProducts.innerHTML = '<p>No products available.</p>';
@@ -149,6 +154,7 @@ async function loadAdminProducts() {
       <tr>
         <th>SKU</th>
         <th>Name</th>
+        <th>Description</th>
         <th>Category</th>
         <th>Price</th>
         <th>Stock</th>
@@ -169,6 +175,7 @@ async function loadAdminProducts() {
           ${product.image ? `<button class="inventory-btn secondary" data-action="preview" data-image="${product.image}">Preview</button>` : ''}
         </div>
       </td>
+      <td>${product.description || ''}</td>
       <td>${product.category}</td>
       <td>$${product.price}</td>
       <td>${product.stock}</td>
@@ -196,6 +203,51 @@ async function loadAdminProducts() {
   });
 
   adminProducts.appendChild(table);
+  renderAdminImageGallery(products);
+}
+
+function renderAdminImageGallery(products) {
+  if (!adminImageGallery) {
+    return;
+  }
+
+  if (!products.length) {
+    adminImageGallery.innerHTML = '<p>No products available for gallery preview.</p>';
+    return;
+  }
+
+  products.forEach((product) => {
+    const card = document.createElement('article');
+    card.className = 'admin-gallery-card';
+    const imageMarkup = product.image
+      ? `<img class="admin-gallery-image" src="${product.image}" alt="${product.name}" />`
+      : '<div class="admin-gallery-empty">No image uploaded yet</div>';
+
+    card.innerHTML = `
+      ${imageMarkup}
+      <h3>${product.name}</h3>
+      <p>${product.description || 'No product description set yet.'}</p>
+      <div class="admin-gallery-actions">
+        ${product.image ? '<button type="button" class="inventory-btn secondary" data-action="preview">View</button>' : ''}
+        <button type="button" class="inventory-btn" data-action="replace">${product.image ? 'Replace image' : 'Upload image'}</button>
+      </div>
+    `;
+
+    const viewButton = card.querySelector('[data-action="preview"]');
+    if (viewButton && product.image) {
+      viewButton.addEventListener('click', () => showImagePreview(product.image));
+    }
+
+    const replaceButton = card.querySelector('[data-action="replace"]');
+    if (replaceButton) {
+      replaceButton.addEventListener('click', () => {
+        startEditingProduct(product);
+        imageUploadInput?.focus();
+      });
+    }
+
+    adminImageGallery.appendChild(card);
+  });
 }
 
 async function readFileAsDataUrl(file) {
@@ -305,6 +357,11 @@ productForm.addEventListener('submit', async (event) => {
   };
 
   if (imageFile) {
+    const maxUploadBytes = maxUploadMb * 1024 * 1024;
+    if (imageFile.size > maxUploadBytes) {
+      setLoginStatus(`Image too large. Please upload a file up to ${maxUploadMb}MB.`, true);
+      return;
+    }
     const dataUrl = await readFileAsDataUrl(imageFile);
     payload.imageFile = {
       filename: imageFile.name,

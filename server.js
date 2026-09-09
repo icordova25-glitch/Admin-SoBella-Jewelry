@@ -14,7 +14,7 @@ try {
 
 const app = express();
 const port = process.env.PORT || 3000;
-const uploadBodyLimit = `${Number(process.env.UPLOAD_BODY_LIMIT_MB || 12)}mb`;
+const uploadBodyLimit = `${Number(process.env.UPLOAD_BODY_LIMIT_MB || 40)}mb`;
 const dataDir = path.join(__dirname, 'data');
 const uploadsDir = path.join(__dirname, 'uploads');
 const productsPath = path.join(dataDir, 'products.json');
